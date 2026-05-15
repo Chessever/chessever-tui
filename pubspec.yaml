@@ -1,0 +1,16 @@
+name: chessever_tui
+description: Terminal UI chess — play Maia in your terminal. Flutter/Dart powered by nocterm.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  nocterm: ^0.6.0
+  dartchess: ^0.10.0
+  args: ^2.5.0
+  path: ^1.9.0
+
+dev_dependencies:
+  lints: ^4.0.0
