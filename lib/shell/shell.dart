@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:chessever_tui/commands/commands_pane.dart';
 import 'package:chessever_tui/play/play_pane.dart';
 import 'package:chessever_tui/shell/sidebar.dart';
 import 'package:chessever_tui/theme/colors.dart';
@@ -45,6 +46,8 @@ class _ChesseverShellState extends State<ChesseverShell> {
     switch (_route) {
       case SidebarRoute.play:
         return const PlayPane();
+      case SidebarRoute.commands:
+        return const CommandsPane();
       default:
         return _ComingSoon(label: _route.label);
     }

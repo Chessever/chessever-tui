@@ -1,0 +1,124 @@
+name: Release
+
+# Builds chessever-tui for macOS (x64 + arm64) and Windows (x64) using
+# `dart compile exe`. Produces a single binary per platform, packages it,
+# and uploads everything to the GitHub release that triggered the run.
+#
+# Triggers:
+#   - push tag v*       -> publishes a release named after the tag
+#   - workflow_dispatch -> manual run, uploads to a draft "manual" release
+#
+# Public download URLs (installed via tui.chessever.com/install.sh):
+#   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-macos-arm64.tar.gz
+#   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-macos-x64.tar.gz
+#   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-windows-x64.zip
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-arm64
+            runner: macos-14
+            target_os: macos
+            target_arch: arm64
+            archive: tar.gz
+            ext: ""
+          - label: macos-x64
+            runner: macos-13
+            target_os: macos
+            target_arch: x64
+            archive: tar.gz
+            ext: ""
+          - label: windows-x64
+            runner: windows-latest
+            target_os: windows
+            target_arch: x64
+            archive: zip
+            ext: ".exe"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: dart pub get
+        run: dart pub get
+
+      - name: dart analyze
+        run: dart analyze --fatal-infos
+
+      - name: compile
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p build/out
+          dart compile exe bin/chessever_tui.dart \
+            -o build/out/chessever-tui${{ matrix.ext }}
+          ls -la build/out
+
+      - name: package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -eu
+          cd build/out
+          tar -czf "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.tar.gz" \
+            "chessever-tui"
+          shasum -a 256 "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.tar.gz" \
+            > "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.tar.gz.sha256"
+
+      - name: package (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location build/out
+          $archive = "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.zip"
+          Compress-Archive -Path 'chessever-tui.exe' -DestinationPath $archive -Force
+          (Get-FileHash $archive -Algorithm SHA256).Hash | Out-File -Encoding ascii "$archive.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}
+          path: |
+            build/out/chessever-tui-*.tar.gz
+            build/out/chessever-tui-*.tar.gz.sha256
+            build/out/chessever-tui-*.zip
+            build/out/chessever-tui-*.zip.sha256
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: list artifacts
+        run: ls -lah dist
+
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -5,6 +5,7 @@ import 'package:nocterm/nocterm.dart';
 /// the desktop sidebar so the visual identity matches.
 enum SidebarRoute {
   play('Play', '♞'),
+  commands('Commands', '⌘'),
   tournaments('Tournaments', '♛'),
   library('Library', '☰'),
   favorites('Favorites', '★'),
