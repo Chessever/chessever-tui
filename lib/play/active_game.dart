@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:chessever_tui/audio/sfx.dart';
 import 'package:chessever_tui/engine/maia_engine.dart';
 import 'package:chessever_tui/play/board.dart';
 import 'package:chessever_tui/play/play_pane.dart';
@@ -25,7 +26,8 @@ class ActiveGameView extends StatefulComponent {
   State<ActiveGameView> createState() => _ActiveGameViewState();
 }
 
-class _ActiveGameViewState extends State<ActiveGameView> {
+class _ActiveGameViewState extends State<ActiveGameView>
+    with TickerProviderStateMixin {
   late Position _position;
   final List<String> _historyUci = [];
   final List<String> _historySan = [];
@@ -41,6 +43,10 @@ class _ActiveGameViewState extends State<ActiveGameView> {
   bool _flipped = false;
   String? _resultText;
 
+  late final AnimationController _moveFlash;
+  late final AnimationController _checkPulse;
+  late final AnimationController _selectPulse;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +54,19 @@ class _ActiveGameViewState extends State<ActiveGameView> {
     _flipped = component.config.humanSide == Side.black;
     _cursor =
         component.config.humanSide == Side.white ? Square.e2 : Square.e7;
+    _moveFlash = AnimationController(
+      duration: const Duration(milliseconds: 360),
+      vsync: this,
+    );
+    _checkPulse = AnimationController(
+      duration: const Duration(milliseconds: 700),
+      vsync: this,
+    );
+    _selectPulse = AnimationController(
+      duration: const Duration(milliseconds: 520),
+      vsync: this,
+    );
+    SfxPlayer.instance.preload();
     if (component.config.humanSide == Side.black) {
       scheduleMicrotask(_runEngine);
     }
@@ -55,6 +74,9 @@ class _ActiveGameViewState extends State<ActiveGameView> {
 
   @override
   void dispose() {
+    _moveFlash.dispose();
+    _checkPulse.dispose();
+    _selectPulse.dispose();
     component.engine.dispose();
     super.dispose();
   }
@@ -86,6 +108,9 @@ class _ActiveGameViewState extends State<ActiveGameView> {
   void _applyMove(NormalMove move) {
     final san = _position.makeSan(move).$2;
     final captured = _position.board.pieceAt(move.to);
+    final mover = _position.board.pieceAt(move.from);
+    final isCastle = mover?.role == Role.king &&
+        (move.from.file - move.to.file).abs() == 2;
     final after = _position.playUnchecked(move);
     setState(() {
       if (captured != null) {
@@ -103,10 +128,41 @@ class _ActiveGameViewState extends State<ActiveGameView> {
       _selected = null;
       _legalTargets = <Square>{};
     });
+    _moveFlash.forward(from: 0);
+    _playMoveSfx(
+      captured: captured != null,
+      castle: isCastle,
+      promotion: move.promotion != null,
+    );
     if (_position.isGameOver) {
       _finalize();
-    } else if (_position.turn != component.config.humanSide) {
-      unawaited(_runEngine());
+    } else {
+      if (_position.isCheck) {
+        _checkPulse.repeat(reverse: true, period: const Duration(milliseconds: 700));
+        SfxPlayer.instance.play(Sfx.check);
+      } else {
+        _checkPulse.stop();
+        _checkPulse.value = 0;
+      }
+      if (_position.turn != component.config.humanSide) {
+        unawaited(_runEngine());
+      }
+    }
+  }
+
+  void _playMoveSfx({
+    required bool captured,
+    required bool castle,
+    required bool promotion,
+  }) {
+    if (castle) {
+      SfxPlayer.instance.play(Sfx.castle);
+    } else if (promotion) {
+      SfxPlayer.instance.play(Sfx.promotion);
+    } else if (captured) {
+      SfxPlayer.instance.play(Sfx.capture);
+    } else {
+      SfxPlayer.instance.play(Sfx.move);
     }
   }
 
@@ -123,6 +179,12 @@ class _ActiveGameViewState extends State<ActiveGameView> {
             : 'Maia won';
       }
     });
+    _checkPulse.stop();
+    if (outcome?.winner == null) {
+      SfxPlayer.instance.play(Sfx.draw);
+    } else {
+      SfxPlayer.instance.play(Sfx.checkmate);
+    }
   }
 
   void _selectOrMove(Square sq) {
@@ -136,6 +198,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
         _selected = sq;
         _legalTargets = legal.toSet();
       });
+      _selectPulse.repeat(reverse: true, period: const Duration(milliseconds: 520));
       return;
     }
     if (sq == _selected) {
@@ -143,6 +206,8 @@ class _ActiveGameViewState extends State<ActiveGameView> {
         _selected = null;
         _legalTargets = <Square>{};
       });
+      _selectPulse.stop();
+      _selectPulse.value = 0;
       return;
     }
     if (_legalTargets.contains(sq)) {
@@ -184,6 +249,8 @@ class _ActiveGameViewState extends State<ActiveGameView> {
         _selected = null;
         _legalTargets = <Square>{};
       });
+      _selectPulse.stop();
+      _selectPulse.value = 0;
       return true;
     }
     if (event.logicalKey == LogicalKey.arrowUp) {
@@ -229,16 +296,23 @@ class _ActiveGameViewState extends State<ActiveGameView> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            BoardView(
-              position: _position,
-              cursor: _cursor,
-              selected: _selected,
-              legalTargets: _legalTargets,
-              lastMoveFrom: _lastMoveFrom,
-              lastMoveTo: _lastMoveTo,
-              flipped: _flipped,
-              checkSquare: _checkSquare(),
-              onCellTap: _selectOrMove,
+            AnimatedBuilder(
+              animation: Listenable.merge(
+                  [_moveFlash, _checkPulse, _selectPulse]),
+              builder: (context, _) => BoardView(
+                position: _position,
+                cursor: _cursor,
+                selected: _selected,
+                legalTargets: _legalTargets,
+                lastMoveFrom: _lastMoveFrom,
+                lastMoveTo: _lastMoveTo,
+                flipped: _flipped,
+                checkSquare: _checkSquare(),
+                moveFlash: _moveFlash.value,
+                checkPulse: _checkPulse.value,
+                selectPulse: _selectPulse.value,
+                onCellTap: _selectOrMove,
+              ),
             ),
             const SizedBox(width: 2),
             Expanded(child: _sidePanel()),
