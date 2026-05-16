@@ -30,6 +30,9 @@ class ChesseverColors {
   // Board (default Chessever "blue-slate" theme).
   static const boardLight = Color.fromRGB(0xD1, 0xE9, 0xE9);
   static const boardDark = Color.fromRGB(0x6B, 0x93, 0x9F);
+  static const boardLightPixel = Color.fromRGB(0xB8, 0xD6, 0xD6);
+  static const boardDarkPixel = Color.fromRGB(0x55, 0x7F, 0x8B);
+  static const blackPiece = Color.fromRGB(0x10, 0x10, 0x12);
 
   // Cursor + selection accents — built on top of brand primary.
   static const cursorRing = Color.fromRGB(0x0F, 0xB4, 0xE5);

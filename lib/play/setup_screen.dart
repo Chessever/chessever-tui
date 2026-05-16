@@ -1,5 +1,4 @@
-import 'package:chessever_tui/engine/maia_engine.dart';
-import 'package:chessever_tui/play/play_pane.dart';
+import 'package:chessever_tui/play/play_config.dart';
 import 'package:chessever_tui/theme/colors.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
@@ -15,7 +14,9 @@ class PlaySetupScreen extends StatefulComponent {
 class _PlaySetupScreenState extends State<PlaySetupScreen> {
   Side _side = Side.white;
   int _elo = 1500;
-  int _focus = 0; // 0 side, 1 elo, 2 start
+  TimeControl _timeControl = TimeControl.blitz;
+  int _focus = 0; // 0 side, 1 elo, 2 clock, 3 start
+  String _typedElo = '';
 
   @override
   Component build(BuildContext context) {
@@ -46,6 +47,9 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
               _label('opponent strength (Maia ELO)'),
               _eloRow(),
               const SizedBox(height: 1),
+              _label('clock'),
+              _clockRow(),
+              const SizedBox(height: 1),
               _startButton(),
               const SizedBox(height: 1),
               _legend(),
@@ -58,15 +62,15 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
 
   bool _onKey(KeyboardEvent event) {
     if (event.logicalKey == LogicalKey.tab) {
-      setState(() => _focus = (_focus + 1) % 3);
+      setState(() => _focus = (_focus + 1) % 4);
       return true;
     }
     if (event.logicalKey == LogicalKey.arrowDown) {
-      setState(() => _focus = (_focus + 1) % 3);
+      setState(() => _focus = (_focus + 1) % 4);
       return true;
     }
     if (event.logicalKey == LogicalKey.arrowUp) {
-      setState(() => _focus = (_focus + 2) % 3);
+      setState(() => _focus = (_focus + 3) % 4);
       return true;
     }
     if (_focus == 0 &&
@@ -77,18 +81,45 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
     }
     if (_focus == 1) {
       if (event.logicalKey == LogicalKey.arrowLeft) {
-        setState(() => _elo = _prevElo(_elo));
+        setState(() => _setElo(_elo - 50));
         return true;
       }
       if (event.logicalKey == LogicalKey.arrowRight) {
-        setState(() => _elo = _nextElo(_elo));
+        setState(() => _setElo(_elo + 50));
+        return true;
+      }
+      if (event.logicalKey == LogicalKey.backspace) {
+        setState(() {
+          if (_typedElo.isNotEmpty) {
+            _typedElo = _typedElo.substring(0, _typedElo.length - 1);
+            _elo = _typedElo.isEmpty ? 1500 : _normalizeElo(_typedElo);
+          }
+        });
+        return true;
+      }
+      final digit = event.character;
+      if (digit != null && RegExp(r'^\d$').hasMatch(digit)) {
+        setState(() {
+          _typedElo = (_typedElo + digit);
+          if (_typedElo.length > 4) _typedElo = digit;
+          _elo = _normalizeElo(_typedElo);
+        });
         return true;
       }
     }
-    if (event.logicalKey == LogicalKey.enter ||
-        event.character == ' ') {
-      if (_focus == 2) {
-        component.onStart(PlayConfig(humanSide: _side, elo: _elo));
+    if (_focus == 2 &&
+        (event.logicalKey == LogicalKey.arrowLeft ||
+            event.logicalKey == LogicalKey.arrowRight)) {
+      setState(() => _timeControl = _cycleClock(
+            event.logicalKey == LogicalKey.arrowLeft ? -1 : 1,
+          ));
+      return true;
+    }
+    if (event.logicalKey == LogicalKey.enter || event.character == ' ') {
+      if (_focus == 3) {
+        component.onStart(
+          PlayConfig(humanSide: _side, elo: _elo, timeControl: _timeControl),
+        );
         return true;
       }
       if (_focus == 0) {
@@ -99,14 +130,20 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
     return false;
   }
 
-  int _nextElo(int current) {
-    final i = maiaElos.indexOf(current);
-    return maiaElos[(i + 1) % maiaElos.length];
+  void _setElo(int elo) {
+    _elo = elo.clamp(100, 3000);
+    _typedElo = '';
   }
 
-  int _prevElo(int current) {
-    final i = maiaElos.indexOf(current);
-    return maiaElos[(i - 1 + maiaElos.length) % maiaElos.length];
+  int _normalizeElo(String value) {
+    final parsed = int.tryParse(value) ?? 1500;
+    return parsed.clamp(100, 3000);
+  }
+
+  TimeControl _cycleClock(int delta) {
+    final values = TimeControl.values;
+    final i = values.indexOf(_timeControl);
+    return values[(i + delta + values.length) % values.length];
   }
 
   Component _label(String text) => Text(
@@ -127,8 +164,21 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
   Component _eloRow() {
     return Row(
       children: [
-        for (final elo in maiaElos) ...[
-          _pill('$elo', _elo == elo, _focus == 1),
+        _pill('$_elo', true, _focus == 1),
+        const SizedBox(width: 2),
+        Text(
+          _focus == 1 ? 'type digits or ←→ by 50' : '100..3000',
+          style: TextStyle(color: ChesseverColors.tertiaryText),
+        ),
+      ],
+    );
+  }
+
+  Component _clockRow() {
+    return Row(
+      children: [
+        for (final value in TimeControl.values) ...[
+          _pill(value.label, _timeControl == value, _focus == 2),
           const SizedBox(width: 1),
         ],
       ],
@@ -159,10 +209,11 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
   }
 
   Component _startButton() {
-    final focused = _focus == 2;
+    final focused = _focus == 3;
     return GestureDetector(
-      onTap: () =>
-          component.onStart(PlayConfig(humanSide: _side, elo: _elo)),
+      onTap: () => component.onStart(
+        PlayConfig(humanSide: _side, elo: _elo, timeControl: _timeControl),
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
@@ -195,7 +246,7 @@ class _PlaySetupScreenState extends State<PlaySetupScreen> {
           style: TextStyle(color: ChesseverColors.tertiaryText),
         ),
         Text(
-          'enter    confirm',
+          'enter    confirm / start',
           style: TextStyle(color: ChesseverColors.tertiaryText),
         ),
       ],

@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:chessever_tui/engine/maia_engine.dart';
 import 'package:chessever_tui/play/board.dart';
-import 'package:chessever_tui/play/play_pane.dart';
+import 'package:chessever_tui/play/play_config.dart';
+import 'package:chessever_tui/settings/settings_model.dart';
 import 'package:chessever_tui/theme/colors.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
@@ -13,12 +14,14 @@ class ActiveGameView extends StatefulComponent {
     required this.config,
     required this.engine,
     required this.engineLabel,
+    required this.settings,
     required this.onExit,
   });
 
   final PlayConfig config;
   final ChessEngine engine;
   final String engineLabel;
+  final ChesseverSettings settings;
   final VoidCallback onExit;
 
   @override
@@ -40,14 +43,20 @@ class _ActiveGameViewState extends State<ActiveGameView> {
   bool _engineThinking = false;
   bool _flipped = false;
   String? _resultText;
+  late Duration _whiteRemaining;
+  late Duration _blackRemaining;
+  Timer? _clockTimer;
+  DateTime? _lastClockTick;
 
   @override
   void initState() {
     super.initState();
     _position = Chess.initial;
+    _whiteRemaining = component.config.timeControl.initial;
+    _blackRemaining = component.config.timeControl.initial;
     _flipped = component.config.humanSide == Side.black;
-    _cursor =
-        component.config.humanSide == Side.white ? Square.e2 : Square.e7;
+    _cursor = component.config.humanSide == Side.white ? Square.e2 : Square.e7;
+    _startClock();
     if (component.config.humanSide == Side.black) {
       scheduleMicrotask(_runEngine);
     }
@@ -55,6 +64,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
     component.engine.dispose();
     super.dispose();
   }
@@ -84,6 +94,9 @@ class _ActiveGameViewState extends State<ActiveGameView> {
   }
 
   void _applyMove(NormalMove move) {
+    _syncClock();
+    if (_resultText != null) return;
+    final mover = _position.turn;
     final san = _position.makeSan(move).$2;
     final captured = _position.board.pieceAt(move.to);
     final after = _position.playUnchecked(move);
@@ -96,6 +109,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
         }
       }
       _position = after;
+      _addIncrement(mover);
       _historyUci.add(move.uci);
       _historySan.add(san);
       _lastMoveFrom = move.from;
@@ -111,6 +125,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
   }
 
   void _finalize() {
+    _clockTimer?.cancel();
     final outcome = _position.outcome;
     setState(() {
       if (outcome == null) {
@@ -123,6 +138,55 @@ class _ActiveGameViewState extends State<ActiveGameView> {
             : 'Maia won';
       }
     });
+  }
+
+  void _startClock() {
+    _lastClockTick = DateTime.now();
+    _clockTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (!mounted || _resultText != null) return;
+      _syncClock();
+    });
+  }
+
+  void _syncClock() {
+    final now = DateTime.now();
+    final last = _lastClockTick ?? now;
+    _lastClockTick = now;
+    if (_resultText != null) return;
+    final elapsed = now.difference(last);
+    if (elapsed <= Duration.zero) return;
+
+    final turn = _position.turn;
+    setState(() {
+      if (turn == Side.white) {
+        _whiteRemaining -= elapsed;
+        if (_whiteRemaining <= Duration.zero) _flag(Side.white);
+      } else {
+        _blackRemaining -= elapsed;
+        if (_blackRemaining <= Duration.zero) _flag(Side.black);
+      }
+    });
+  }
+
+  void _addIncrement(Side side) {
+    final increment = component.config.timeControl.increment;
+    if (increment == Duration.zero) return;
+    if (side == Side.white) {
+      _whiteRemaining += increment;
+    } else {
+      _blackRemaining += increment;
+    }
+  }
+
+  void _flag(Side side) {
+    _clockTimer?.cancel();
+    final humanFlagged = side == component.config.humanSide;
+    _resultText = humanFlagged ? 'You flagged' : 'Maia flagged';
+    if (side == Side.white) {
+      _whiteRemaining = Duration.zero;
+    } else {
+      _blackRemaining = Duration.zero;
+    }
   }
 
   void _selectOrMove(Square sq) {
@@ -175,7 +239,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
       setState(() => _flipped = !_flipped);
       return true;
     }
-    if (ch == 'r') {
+    if (ch == 'n' || ch == 'r') {
       component.onExit();
       return true;
     }
@@ -224,31 +288,53 @@ class _ActiveGameViewState extends State<ActiveGameView> {
     return Focusable(
       focused: true,
       onKeyEvent: _onKey,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BoardView(
-              position: _position,
-              cursor: _cursor,
-              selected: _selected,
-              legalTargets: _legalTargets,
-              lastMoveFrom: _lastMoveFrom,
-              lastMoveTo: _lastMoveTo,
-              flipped: _flipped,
-              checkSquare: _checkSquare(),
-              onCellTap: _selectOrMove,
-            ),
-            const SizedBox(width: 2),
-            Expanded(child: _sidePanel()),
-          ],
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compactBoard = constraints.maxHeight < 34;
+          final boardDensity =
+              compactBoard ? BoardDensity.compact : BoardDensity.full;
+          final wide = constraints.maxWidth >=
+              (boardDensity == BoardDensity.full ? 86 : 72);
+          final board = BoardView(
+            position: _position,
+            cursor: _cursor,
+            selected: _selected,
+            legalTargets: _legalTargets,
+            lastMoveFrom: _lastMoveFrom,
+            lastMoveTo: _lastMoveTo,
+            flipped: _flipped,
+            checkSquare: _checkSquare(),
+            density: boardDensity,
+            onCellTap: _selectOrMove,
+          );
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+            child: wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      board,
+                      const SizedBox(width: 1),
+                      Expanded(child: _sidePanel(compact: compactBoard)),
+                    ],
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        board,
+                        const SizedBox(height: 1),
+                        _sidePanel(compact: true),
+                      ],
+                    ),
+                  ),
+          );
+        },
       ),
     );
   }
 
-  Component _sidePanel() {
+  Component _sidePanel({required bool compact}) {
     return Container(
       decoration: BoxDecoration(
         color: ChesseverColors.black2,
@@ -257,54 +343,65 @@ class _ActiveGameViewState extends State<ActiveGameView> {
           style: BoxBorderStyle.rounded,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _header(),
-          const SizedBox(height: 1),
-          _capturesBlock(),
+          _header(compact: compact),
           const SizedBox(height: 1),
           _statusBlock(),
+          if (!compact) ...[
+            const SizedBox(height: 1),
+            _capturesBlock(),
+          ],
           const SizedBox(height: 1),
-          _movesBlock(),
+          _movesBlock(maxRows: compact ? 4 : 8),
           const SizedBox(height: 1),
-          _hints(),
+          _hints(compact: compact),
         ],
       ),
     );
   }
 
-  Component _header() {
+  Component _header({required bool compact}) {
     final side = component.config.humanSide == Side.white ? 'White' : 'Black';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text('▲ ', style: TextStyle(color: ChesseverColors.primary)),
+            PixelFlag(color: component.settings.playerFlag.color),
+            const SizedBox(width: 1),
             Text('You',
                 style: TextStyle(
                   color: ChesseverColors.white,
                   fontWeight: FontWeight.bold,
                 )),
-            Text('   $side',
+            Text(' $side',
                 style: TextStyle(color: ChesseverColors.secondaryText)),
+            const Spacer(),
+            Text(_clockFor(component.config.humanSide),
+                style: TextStyle(color: ChesseverColors.primary)),
           ],
         ),
         Row(
           children: [
-            Text('▽ ',
-                style: TextStyle(color: ChesseverColors.captureRing)),
+            const PixelFlag(color: ChesseverColors.white, pirate: true),
+            const SizedBox(width: 1),
             Text('Maia ${component.config.elo}',
                 style: TextStyle(
                   color: ChesseverColors.white,
                   fontWeight: FontWeight.bold,
                 )),
+            const Spacer(),
+            Text(_clockFor(component.config.humanSide.opposite),
+                style: TextStyle(color: ChesseverColors.white70)),
           ],
         ),
-        Text(component.engineLabel,
-            style: TextStyle(color: ChesseverColors.tertiaryText)),
+        if (!compact)
+          Text(
+              '${component.config.timeControl.label} · ${component.engineLabel}',
+              style: TextStyle(color: ChesseverColors.tertiaryText)),
       ],
     );
   }
@@ -335,8 +432,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
           ),
         ]),
         Row(children: [
-          Text('▽ ',
-              style: TextStyle(color: ChesseverColors.captureRing)),
+          Text('▽ ', style: TextStyle(color: ChesseverColors.captureRing)),
           Text(
             glyphs(_capturedByBlack).isEmpty ? '—' : glyphs(_capturedByBlack),
             style: TextStyle(color: ChesseverColors.white),
@@ -373,7 +469,7 @@ class _ActiveGameViewState extends State<ActiveGameView> {
     );
   }
 
-  Component _movesBlock() {
+  Component _movesBlock({required int maxRows}) {
     final pairs = <String>[];
     for (var i = 0; i < _historySan.length; i += 2) {
       final moveNumber = (i ~/ 2) + 1;
@@ -382,12 +478,11 @@ class _ActiveGameViewState extends State<ActiveGameView> {
       pairs.add('${moveNumber.toString().padLeft(2)}. ${w.padRight(7)} $b');
     }
     final tail =
-        pairs.length > 8 ? pairs.sublist(pairs.length - 8) : pairs;
+        pairs.length > maxRows ? pairs.sublist(pairs.length - maxRows) : pairs;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('moves',
-            style: TextStyle(color: ChesseverColors.secondaryText)),
+        Text('moves', style: TextStyle(color: ChesseverColors.secondaryText)),
         if (tail.isEmpty)
           Text('—', style: TextStyle(color: ChesseverColors.tertiaryText)),
         for (final line in tail)
@@ -396,21 +491,30 @@ class _ActiveGameViewState extends State<ActiveGameView> {
     );
   }
 
-  Component _hints() {
+  Component _hints({required bool compact}) {
+    final hints = compact
+        ? const ['←→↑↓ cursor', 'space move', 'n new  q quit']
+        : const [
+            '←→↑↓  cursor',
+            'space select / move',
+            'f     flip board',
+            'n     new setup',
+            'q     quit game',
+          ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('←→↑↓  cursor',
-            style: TextStyle(color: ChesseverColors.tertiaryText)),
-        Text('space select / move',
-            style: TextStyle(color: ChesseverColors.tertiaryText)),
-        Text('f     flip board',
-            style: TextStyle(color: ChesseverColors.tertiaryText)),
-        Text('r     resign / new',
-            style: TextStyle(color: ChesseverColors.tertiaryText)),
-        Text('q     quit app',
-            style: TextStyle(color: ChesseverColors.tertiaryText)),
+        for (final hint in hints)
+          Text(hint, style: TextStyle(color: ChesseverColors.tertiaryText)),
       ],
     );
+  }
+
+  String _clockFor(Side side) {
+    final duration = side == Side.white ? _whiteRemaining : _blackRemaining;
+    final safe = duration.isNegative ? Duration.zero : duration;
+    final minutes = safe.inMinutes.remainder(60).toString();
+    final seconds = safe.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }

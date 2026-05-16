@@ -6,6 +6,9 @@ version: 0.1.0
 environment:
   sdk: ^3.4.0
 
+executables:
+  chessever: chessever_tui
+
 dependencies:
   nocterm: ^0.6.0
   dartchess: ^0.10.0

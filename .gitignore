@@ -7,3 +7,5 @@ pubspec.lock
 .vscode/
 .DS_Store
 weights/
+
+.claude/

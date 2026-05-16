@@ -1,18 +1,20 @@
 import 'package:chessever_tui/engine/maia_engine.dart';
 import 'package:chessever_tui/play/active_game.dart';
+import 'package:chessever_tui/play/play_config.dart';
 import 'package:chessever_tui/play/setup_screen.dart';
+import 'package:chessever_tui/settings/settings_model.dart';
 import 'package:chessever_tui/theme/colors.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
 
-class PlayConfig {
-  const PlayConfig({required this.humanSide, required this.elo});
-  final Side humanSide;
-  final int elo;
-}
-
 class PlayPane extends StatefulComponent {
-  const PlayPane({super.key});
+  const PlayPane({
+    super.key,
+    required this.initialConfig,
+    required this.settings,
+  });
+
+  final PlayConfig initialConfig;
+  final ChesseverSettings settings;
 
   @override
   State<PlayPane> createState() => _PlayPaneState();
@@ -22,6 +24,19 @@ class _PlayPaneState extends State<PlayPane> {
   PlayConfig? _started;
   String? _engineLabel;
   ChessEngine? _engine;
+  bool _autoStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoStart();
+  }
+
+  void _autoStart() {
+    if (_autoStarted) return;
+    _autoStarted = true;
+    _start(component.initialConfig);
+  }
 
   Future<void> _start(PlayConfig config) async {
     final engine = await MaiaEngineFactory.resolve(elo: config.elo);
@@ -66,6 +81,7 @@ class _PlayPaneState extends State<PlayPane> {
                     config: _started!,
                     engine: _engine!,
                     engineLabel: _engineLabel ?? 'engine',
+                    settings: component.settings,
                     onExit: _exitGame,
                   ),
           ),
@@ -102,12 +118,12 @@ class _PlayHeader extends StatelessComponent {
             ),
           ),
           Text(
-            '   single game',
+            active ? '   bot game' : '   choose elo',
             style: TextStyle(color: ChesseverColors.secondaryText),
           ),
           const Spacer(),
           Text(
-            active ? 'in progress' : 'setup',
+            active ? 'playing' : 'setup',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
         ],

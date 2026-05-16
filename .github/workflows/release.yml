@@ -1,20 +1,25 @@
 name: Release
 
-# Builds chessever-tui for macOS (x64 + arm64) and Windows (x64) using
+# Builds chessever for macOS (x64 + arm64), Linux (x64), and Windows (x64) using
 # `dart compile exe`. Produces a single binary per platform, packages it,
 # and uploads everything to the GitHub release that triggered the run.
 #
 # Triggers:
-#   - push tag v*       -> publishes a release named after the tag
-#   - workflow_dispatch -> manual run, uploads to a draft "manual" release
+#   - push to main/master -> updates the moving tui-latest release
+#   - push tag v*         -> publishes a release named after the tag
+#   - workflow_dispatch   -> builds artifacts without publishing
 #
 # Public download URLs (installed via tui.chessever.com/install.sh):
 #   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-macos-arm64.tar.gz
 #   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-macos-x64.tar.gz
+#   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-linux-x64.tar.gz
 #   https://github.com/Chessever/chessever-tui/releases/latest/download/chessever-tui-windows-x64.zip
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
@@ -39,6 +44,12 @@ jobs:
           - label: macos-x64
             runner: macos-13
             target_os: macos
+            target_arch: x64
+            archive: tar.gz
+            ext: ""
+          - label: linux-x64
+            runner: ubuntu-latest
+            target_os: linux
             target_arch: x64
             archive: tar.gz
             ext: ""
@@ -68,7 +79,8 @@ jobs:
           set -eu
           mkdir -p build/out
           dart compile exe bin/chessever_tui.dart \
-            -o build/out/chessever-tui${{ matrix.ext }}
+            -o build/out/chessever${{ matrix.ext }}
+          cp build/out/chessever${{ matrix.ext }} build/out/chessever-tui${{ matrix.ext }}
           ls -la build/out
 
       - name: package (tar.gz)
@@ -78,7 +90,7 @@ jobs:
           set -eu
           cd build/out
           tar -czf "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.tar.gz" \
-            "chessever-tui"
+            "chessever" "chessever-tui"
           shasum -a 256 "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.tar.gz" \
             > "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.tar.gz.sha256"
 
@@ -89,7 +101,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Set-Location build/out
           $archive = "chessever-tui-${{ matrix.target_os }}-${{ matrix.target_arch }}.zip"
-          Compress-Archive -Path 'chessever-tui.exe' -DestinationPath $archive -Force
+          Compress-Archive -Path 'chessever.exe','chessever-tui.exe' -DestinationPath $archive -Force
           (Get-FileHash $archive -Algorithm SHA256).Hash | Out-File -Encoding ascii "$archive.sha256"
 
       - uses: actions/upload-artifact@v4
@@ -105,9 +117,12 @@ jobs:
   release:
     name: publish release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        if: startsWith(github.ref, 'refs/heads/')
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -116,9 +131,20 @@ jobs:
       - name: list artifacts
         run: ls -lah dist
 
+      - name: move latest tag
+        if: startsWith(github.ref, 'refs/heads/')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f tui-latest "$GITHUB_SHA"
+          git push -f origin tui-latest
+
       - name: create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/heads/') && 'tui-latest' || github.ref_name }}
+          name: ${{ startsWith(github.ref, 'refs/heads/') && 'Chessever TUI latest' || github.ref_name }}
           files: dist/*
-          generate_release_notes: true
+          generate_release_notes: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          make_latest: true
           fail_on_unmatched_files: true

@@ -8,9 +8,9 @@ Terminal UI chess — play **Maia** in your terminal. Pure Dart, powered by
 │ CHESSEVER  · tui │ 8  │   ░░░  ░░░  ░░░  ░░░  ░░░  ░░░  ░░░    │
 │                  │ 7  │  ███▌ ███▌ ███▌ ███▌ ███▌ ███▌ ███▌    │
 │ ▶ Play           │ 6  │                                        │
-│   Tournaments    │ 5  │            ▟█▙                         │
-│   Library        │ 4  │           ▟███▙                        │
-│   …              │ 3  │            ▀▘                          │
+│   Settings       │ 5  │            ▟█▙                         │
+│   Update         │ 4  │           ▟███▙                        │
+│                  │ 3  │            ▀▘                          │
 │                  │ 2  │  ███▌ ███▌ ███▌ ███▌ ███▌ ███▌ ███▌    │
 │ ←→↑↓ cursor      │ 1  │   ░░░  ░░░  ░░░  ░░░  ░░░  ░░░  ░░░    │
 │ space  select    │    ╰────────────────────────────────────────╯
@@ -25,6 +25,26 @@ dart pub get
 dart run bin/chessever_tui.dart
 ```
 
+Installed releases expose the command as `chessever`:
+
+```bash
+chessever
+chessever 1900 blitz
+chessever 1500 rapid
+chessever update
+```
+
+`chessever-tui` remains available as a compatibility alias for older scripts.
+
+`chessever` starts a playable Maia 1500 blitz game immediately. Shortcut
+commands accept an ELO, clock preset, and optional side:
+
+```bash
+chessever 1900 blitz       # Maia 1900, 3+0
+chessever 1300 bullet      # Maia 1300, 1+0
+chessever 2200 5+3 black   # custom ELO/time, play black
+```
+
 ## Controls
 
 | key       | action                                  |
@@ -33,7 +53,10 @@ dart run bin/chessever_tui.dart
 | `space`   | first tap selects → shows legal targets; second tap moves |
 | `mouse`   | click any square to do the same thing   |
 | `f`       | flip the board                          |
-| `r`       | resign / new game                       |
+| `n` / `r` | new game setup                          |
+| `p`       | play tab                                |
+| `s`       | settings tab                            |
+| `u`       | update tab                              |
 | `q`       | quit                                    |
 
 ## Maia engine
@@ -67,7 +90,17 @@ If `lc0` or the requested weights are missing, the TUI falls back to a small
 
 - Color palette ported directly from `chessever_frontend_desktop/lib/theme/`.
 - Pieces are 4-row × 5-col pixel sprites drawn with Unicode block characters.
+- The board switches to a compact pixel density when the terminal is short.
+- Pixel-art reference sheet: `assets/pixelart/chessever-pixel-art-reference.png`.
 - Cursor halo and capture rings use brand primary / red.
 - No dependencies on `flutter`. Pure Dart so the binary stays small.
+
+## Updates
+
+GitHub Actions builds release assets for macOS, Linux x64, and Windows x64.
+Pushes to `main`/`master` update the moving `tui-latest` release, and version
+tags `v*` publish tagged releases. The installer and in-app Update button both
+pull from `https://github.com/Chessever/chessever-tui/releases/latest`, so the
+next `chessever` start runs the newly installed binary.
 
 MIT.

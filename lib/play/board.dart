@@ -3,6 +3,8 @@ import 'package:chessever_tui/theme/colors.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
 
+enum BoardDensity { full, compact }
+
 /// Pixel-art chess board. 7×4 cells, 5-wide sprites with a one-column gutter
 /// on each side, board-tinted last-move and selection highlights, plus a
 /// cursor halo that surrounds the active square without obscuring the piece.
@@ -17,6 +19,7 @@ class BoardView extends StatelessComponent {
     required this.lastMoveTo,
     required this.flipped,
     required this.checkSquare,
+    this.density = BoardDensity.full,
     required this.onCellTap,
   });
 
@@ -28,7 +31,12 @@ class BoardView extends StatelessComponent {
   final Square? lastMoveTo;
   final Square? checkSquare;
   final bool flipped;
+  final BoardDensity density;
   final ValueChanged<Square> onCellTap;
+
+  int get _cellWidth => density == BoardDensity.full ? 7 : 5;
+  int get _cellHeight => density == BoardDensity.full ? 4 : 2;
+  int get _spriteWidth => density == BoardDensity.full ? 5 : 3;
 
   @override
   Component build(BuildContext context) {
@@ -52,7 +60,7 @@ class BoardView extends StatelessComponent {
       children: [
         const SizedBox(width: 2),
         Text(
-          '╭${'─' * (8 * 7)}╮',
+          '╭${'─' * (8 * _cellWidth)}╮',
           style: TextStyle(color: ChesseverColors.divider),
         ),
       ],
@@ -64,7 +72,7 @@ class BoardView extends StatelessComponent {
       children: [
         const SizedBox(width: 2),
         Text(
-          '╰${'─' * (8 * 7)}╯',
+          '╰${'─' * (8 * _cellWidth)}╯',
           style: TextStyle(color: ChesseverColors.divider),
         ),
       ],
@@ -90,7 +98,7 @@ class BoardView extends StatelessComponent {
   Component _rankLabel(int rank) {
     return Container(
       width: 2,
-      height: 4,
+      height: _cellHeight.toDouble(),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -112,9 +120,10 @@ class BoardView extends StatelessComponent {
       final char = String.fromCharCode('a'.codeUnitAt(0) + file);
       labels.add(
         Container(
-          width: 7,
+          width: _cellWidth.toDouble(),
+          height: 1,
           child: Text(
-            '   $char   ',
+            density == BoardDensity.full ? '   $char   ' : '  $char  ',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
         ),
@@ -146,43 +155,55 @@ class BoardView extends StatelessComponent {
     final isLegalTarget = legalTargets.contains(sq);
     final isCaptureTarget = isLegalTarget && piece != null;
 
-    final pieceFg = piece == null
-        ? bg
+    final emptyFg = isLight
+        ? ChesseverColors.boardLightPixel
+        : ChesseverColors.boardDarkPixel;
+
+    Color baseFg = piece == null
+        ? emptyFg
         : (piece.color == Side.white
             ? ChesseverColors.white
-            : const Color.fromRGB(0x10, 0x10, 0x12));
+            : ChesseverColors.blackPiece);
 
     final spriteRows = piece == null
-        ? const ['     ', '     ', '     ', '     ']
-        : PieceSprite.forRole(piece.role).rows;
+        ? (isLight ? _emptyRows('░') : _emptyRows('▒'))
+        : (density == BoardDensity.full
+            ? PieceSprite.forRole(piece.role).rows
+            : PieceSprite.forRole(piece.role).compactRows);
 
     // Apply markers onto the sprite rows.
     final rows = List<String>.from(spriteRows);
     if (isLegalTarget && piece == null) {
-      rows[2] = _stamp(rows[2], 2, '•');
+      rows[density == BoardDensity.full ? 2 : 1] =
+          _stamp(' ' * _spriteWidth, _spriteWidth ~/ 2, '•');
+      baseFg = ChesseverColors.legalDot;
     }
 
     final lines = <Component>[];
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < _cellHeight; i++) {
       // Cursor halo: chevrons in top-corners of row 0 and bottom-corners of
       // row 3. Pads to 7 chars so cell width is exact.
-      var line = ' ${rows[i]} '; // 7 chars
+      var line = ' ${rows[i]} ';
       if (isCursor) {
-        if (i == 0) line = _stamp(_stamp(line, 0, '▟'), 6, '▙');
-        if (i == 3) line = _stamp(_stamp(line, 0, '▜'), 6, '▛');
+        if (i == 0) {
+          line = _stamp(_stamp(line, 0, '▟'), _cellWidth - 1, '▙');
+        }
+        if (i == _cellHeight - 1) {
+          line = _stamp(_stamp(line, 0, '▜'), _cellWidth - 1, '▛');
+        }
       }
-      Color fg = pieceFg;
-      if (isCursor && (i == 0 || i == 3)) {
+      Color fg = baseFg;
+      if (isCursor && (i == 0 || i == _cellHeight - 1)) {
         fg = ChesseverColors.cursorRing;
       }
       if (isCaptureTarget && i == 0) {
         line = _stamp(line, 0, '▟');
-        line = _stamp(line, 6, '▙');
+        line = _stamp(line, _cellWidth - 1, '▙');
         fg = ChesseverColors.captureRing;
       }
-      if (isCaptureTarget && i == 3) {
+      if (isCaptureTarget && i == _cellHeight - 1) {
         line = _stamp(line, 0, '▜');
-        line = _stamp(line, 6, '▛');
+        line = _stamp(line, _cellWidth - 1, '▛');
         fg = ChesseverColors.captureRing;
       }
       lines.add(Text(
@@ -194,8 +215,8 @@ class BoardView extends StatelessComponent {
     return GestureDetector(
       onTap: () => onCellTap(sq),
       child: Container(
-        width: 7,
-        height: 4,
+        width: _cellWidth.toDouble(),
+        height: _cellHeight.toDouble(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: lines,
@@ -211,5 +232,12 @@ class BoardView extends StatelessComponent {
     if (chRunes.isEmpty) return line;
     units[index] = chRunes.first;
     return String.fromCharCodes(units);
+  }
+
+  List<String> _emptyRows(String pixel) {
+    if (density == BoardDensity.full) {
+      return ['$pixel   $pixel', '     ', '  $pixel  ', '     '];
+    }
+    return ['$pixel $pixel', ' $pixel '];
   }
 }

@@ -1,17 +1,10 @@
 import 'package:chessever_tui/theme/colors.dart';
 import 'package:nocterm/nocterm.dart';
 
-/// Shell sidebar routes. We ship Play first; the rest are stubs that mirror
-/// the desktop sidebar so the visual identity matches.
 enum SidebarRoute {
   play('Play', '♞'),
-  commands('Commands', '⌘'),
-  tournaments('Tournaments', '♛'),
-  library('Library', '☰'),
-  favorites('Favorites', '★'),
-  players('Players', '☺'),
-  calendar('Calendar', '▣'),
-  settings('Settings', '⚙');
+  settings('Settings', '⚙'),
+  update('Update', '⇧');
 
   const SidebarRoute(this.label, this.glyph);
   final String label;
@@ -31,7 +24,7 @@ class Sidebar extends StatelessComponent {
   @override
   Component build(BuildContext context) {
     return Container(
-      width: 22,
+      width: 16,
       decoration: BoxDecoration(
         color: ChesseverColors.black2,
         border: BoxBorder(
@@ -75,7 +68,7 @@ class _Brand extends StatelessComponent {
             ),
           ),
           Text(
-            'tui edition',
+            'bot only',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
         ],
@@ -140,15 +133,15 @@ class _FooterHint extends StatelessComponent {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '←→↑↓ cursor',
+            'p play',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
           Text(
-            'space  select/move',
+            's settings',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
           Text(
-            'q       quit',
+            'u update',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
         ],
