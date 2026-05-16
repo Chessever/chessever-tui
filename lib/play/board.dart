@@ -21,6 +21,9 @@ class BoardView extends StatelessComponent {
     required this.checkSquare,
     this.density = BoardDensity.full,
     required this.onCellTap,
+    this.moveFlash = 0,
+    this.checkPulse = 0,
+    this.selectPulse = 0,
   });
 
   final Position position;
@@ -33,6 +36,9 @@ class BoardView extends StatelessComponent {
   final bool flipped;
   final BoardDensity density;
   final ValueChanged<Square> onCellTap;
+  final double moveFlash;
+  final double checkPulse;
+  final double selectPulse;
 
   int get _cellWidth => density == BoardDensity.full ? 7 : 5;
   int get _cellHeight => density == BoardDensity.full ? 4 : 2;
@@ -140,15 +146,28 @@ class BoardView extends StatelessComponent {
 
     Color bg = baseBg;
     if (sq == lastMoveFrom || sq == lastMoveTo) {
-      bg = isLight
+      final lastBg = isLight
           ? ChesseverColors.lastMoveLight
           : ChesseverColors.lastMoveDark;
+      if (sq == lastMoveTo && moveFlash > 0) {
+        bg = _lerp(lastBg, ChesseverColors.primary, moveFlash * 0.75);
+      } else {
+        bg = lastBg;
+      }
     }
     if (sq == selected) {
-      bg = ChesseverColors.primary;
+      bg = _lerp(
+        ChesseverColors.primary,
+        ChesseverColors.activeCalendar,
+        selectPulse,
+      );
     }
     if (sq == checkSquare) {
-      bg = ChesseverColors.checkGlow;
+      bg = _lerp(
+        ChesseverColors.checkGlow,
+        ChesseverColors.red,
+        checkPulse,
+      );
     }
 
     final isCursor = sq == cursor;
@@ -222,6 +241,16 @@ class BoardView extends StatelessComponent {
           children: lines,
         ),
       ),
+    );
+  }
+
+  Color _lerp(Color a, Color b, double t) {
+    final tt = t.clamp(0.0, 1.0);
+    int mix(int x, int y) => (x + (y - x) * tt).round().clamp(0, 255);
+    return Color.fromRGB(
+      mix(a.red, b.red),
+      mix(a.green, b.green),
+      mix(a.blue, b.blue),
     );
   }
 

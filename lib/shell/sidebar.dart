@@ -53,6 +53,16 @@ class Sidebar extends StatelessComponent {
 class _Brand extends StatelessComponent {
   const _Brand();
 
+  // 5×9 pixel rendition of the Chessever mark — four cyan corner-blocks framing
+  // a hollow plus, with the brand's king silhouette anchored in the center.
+  static const _logoRows = <String>[
+    '███   ███',
+    '██▌   ▐██',
+    '   ▟█▙   ',
+    '██▌▝█▘▐██',
+    '███   ███',
+  ];
+
   @override
   Component build(BuildContext context) {
     return Container(
@@ -60,6 +70,17 @@ class _Brand extends StatelessComponent {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          for (var i = 0; i < _logoRows.length; i++)
+            Text(
+              _logoRows[i],
+              style: TextStyle(
+                color: i == 2
+                    ? ChesseverColors.white
+                    : ChesseverColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          const SizedBox(height: 1),
           Text(
             'CHESSEVER',
             style: TextStyle(
