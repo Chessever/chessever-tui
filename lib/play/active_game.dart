@@ -440,6 +440,10 @@ class _ActiveGameViewState extends State<ActiveGameView>
         builder: (context, constraints) {
           final h = constraints.maxHeight;
           final w = constraints.maxWidth;
+          // Board footprint (board only, no side panel):
+          //   full    8*7 + 4 = 60 cols, 8*3 + 3 = 27 rows
+          //   compact 8*5 + 4 = 44 cols, 8*2 + 3 = 19 rows
+          //   mini    8*3 + 4 = 28 cols, 8*1 + 3 = 11 rows
           final BoardDensity density;
           if (h >= 28 && w >= 60) {
             density = BoardDensity.full;
@@ -452,12 +456,13 @@ class _ActiveGameViewState extends State<ActiveGameView>
               ? 64
               : density == BoardDensity.compact
                   ? 48
-                  : 28;
+                  : 32;
           final wide = w >= boardW + 26;
           final compact = density != BoardDensity.full;
           final movesRows = density == BoardDensity.full
               ? (h ~/ 4).clamp(4, 12)
               : (density == BoardDensity.compact ? 4 : 2);
+          final showSidePanel = density != BoardDensity.mini || h >= 14;
 
           final board = AnimatedBuilder(
             animation:
@@ -498,8 +503,10 @@ class _ActiveGameViewState extends State<ActiveGameView>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         board,
-                        const SizedBox(height: 1),
-                        _sidePanel(compact: true, movesRows: movesRows),
+                        if (showSidePanel) ...[
+                          const SizedBox(height: 1),
+                          _sidePanel(compact: true, movesRows: movesRows),
+                        ],
                       ],
                     ),
                   ),

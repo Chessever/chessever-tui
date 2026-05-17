@@ -197,12 +197,15 @@ class BoardView extends StatelessComponent {
     final isCaptureTarget = isLegalTarget && piece != null;
     final isDragSource = sq == dragOrigin;
 
-    final emptyFg = isLight
-        ? ChesseverColors.boardLightPixel
-        : ChesseverColors.boardDarkPixel;
+    if (isCaptureTarget) {
+      bg = _lerp(bg, ChesseverColors.captureRing, 0.4);
+    }
+    if (isCursor) {
+      bg = _lerp(bg, ChesseverColors.cursorRing, 0.45);
+    }
 
     Color baseFg = piece == null
-        ? emptyFg
+        ? bg
         : (piece.color == Side.white
             ? ChesseverColors.white
             : ChesseverColors.blackPiece);
@@ -215,45 +218,20 @@ class BoardView extends StatelessComponent {
 
     final rows = List<String>.from(spriteRows);
     if (isLegalTarget && piece == null) {
-      final markerRow = density == BoardDensity.full
-          ? 1
-          : (density == BoardDensity.compact ? 0 : 0);
-      rows[markerRow] =
-          _stamp(' ' * _spriteWidth, _spriteWidth ~/ 2, '•');
+      final markerRow = _cellHeight ~/ 2;
+      if (markerRow < rows.length) {
+        rows[markerRow] =
+            _stamp(' ' * _spriteWidth, _spriteWidth ~/ 2, '•');
+      }
       baseFg = ChesseverColors.legalDot;
     }
 
     final lines = <Component>[];
     for (var i = 0; i < _cellHeight; i++) {
-      var line = density == BoardDensity.mini ? rows[i] : ' ${rows[i]} ';
-      if (isCursor && _cellHeight >= 2) {
-        if (i == 0) {
-          line = _stamp(_stamp(line, 0, '▟'), _cellWidth - 1, '▙');
-        }
-        if (i == _cellHeight - 1) {
-          line = _stamp(_stamp(line, 0, '▜'), _cellWidth - 1, '▛');
-        }
-      }
-      Color fg = baseFg;
-      if (isCursor && _cellHeight >= 2 && (i == 0 || i == _cellHeight - 1)) {
-        fg = ChesseverColors.cursorRing;
-      }
-      if (isCaptureTarget && _cellHeight >= 2 && i == 0) {
-        line = _stamp(line, 0, '▟');
-        line = _stamp(line, _cellWidth - 1, '▙');
-        fg = ChesseverColors.captureRing;
-      }
-      if (isCaptureTarget && _cellHeight >= 2 && i == _cellHeight - 1) {
-        line = _stamp(line, 0, '▜');
-        line = _stamp(line, _cellWidth - 1, '▛');
-        fg = ChesseverColors.captureRing;
-      }
-      if (isCursor && density == BoardDensity.mini) {
-        fg = ChesseverColors.cursorRing;
-      }
+      final line = density == BoardDensity.mini ? rows[i] : ' ${rows[i]} ';
       lines.add(Text(
         line,
-        style: TextStyle(color: fg, backgroundColor: bg),
+        style: TextStyle(color: baseFg, backgroundColor: bg),
       ));
     }
 
@@ -294,14 +272,7 @@ class BoardView extends StatelessComponent {
     }
   }
 
-  List<String> _emptyRowsFull() {
-    final hi = density == BoardDensity.full;
-    return [
-      '     ',
-      hi ? '  ·  ' : '     ',
-      '     ',
-    ];
-  }
+  List<String> _emptyRowsFull() => const ['     ', '     ', '     '];
 
   List<String> _emptyRowsCompact() => const ['   ', '   '];
 
