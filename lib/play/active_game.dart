@@ -50,6 +50,11 @@ class _ActiveGameViewState extends State<ActiveGameView>
   Timer? _clockTimer;
   DateTime? _lastClockTick;
 
+  bool _mouseDown = false;
+  Square? _pressedAt;
+  Square? _dragOver;
+  bool _draggingActive = false;
+
   late final AnimationController _moveFlash;
   late final AnimationController _checkPulse;
   late final AnimationController _selectPulse;
@@ -142,7 +147,9 @@ class _ActiveGameViewState extends State<ActiveGameView>
       _selected = null;
       _legalTargets = <Square>{};
     });
-    _moveFlash.forward(from: 0);
+    _moveFlash.forward(from: 0).whenComplete(() {
+      if (mounted) _moveFlash.value = 0;
+    });
     _playMoveSfx(
       captured: captured != null,
       castle: isCastle,
@@ -294,6 +301,80 @@ class _ActiveGameViewState extends State<ActiveGameView>
     }
   }
 
+  void _onCellMouse(Square sq, MouseEvent e) {
+    if (!_humanToMove) return;
+    final pressed = e.pressed || e.isPrimaryButtonDown;
+
+    if (pressed && !_mouseDown) {
+      _mouseDown = true;
+      _pressedAt = sq;
+      _draggingActive = false;
+      return;
+    }
+    if (_mouseDown && pressed) {
+      if (sq != _pressedAt && !_draggingActive) {
+        final originPiece = _position.board.pieceAt(_pressedAt!);
+        if (originPiece != null && originPiece.color == _position.turn) {
+          _draggingActive = true;
+          _enterDragMode(_pressedAt!);
+        }
+      }
+      if (_draggingActive && _dragOver != sq) {
+        setState(() => _dragOver = sq);
+      }
+      return;
+    }
+    if (_mouseDown && !pressed) {
+      _mouseDown = false;
+      final origin = _pressedAt;
+      final wasDragging = _draggingActive;
+      _pressedAt = null;
+      _draggingActive = false;
+      if (_dragOver != null) setState(() => _dragOver = null);
+      if (origin == null) return;
+      if (wasDragging) {
+        _completeDrag(origin, sq);
+      } else {
+        _selectOrMove(origin);
+      }
+    }
+  }
+
+  void _enterDragMode(Square origin) {
+    final piece = _position.board.pieceAt(origin);
+    if (piece == null || piece.color != _position.turn) return;
+    final legal = makeLegalMoves(_position)[origin];
+    if (legal == null || legal.isEmpty) return;
+    setState(() {
+      _selected = origin;
+      _legalTargets = legal.toSet();
+      _dragOver = origin;
+    });
+    _selectPulse.repeat(
+      reverse: true,
+      period: const Duration(milliseconds: 520),
+    );
+  }
+
+  void _completeDrag(Square origin, Square releaseSq) {
+    if (_selected == origin && _legalTargets.contains(releaseSq)) {
+      final piece = _position.board.pieceAt(origin);
+      Role? promotion;
+      if (piece?.role == Role.pawn &&
+          (releaseSq.rank == Rank.first || releaseSq.rank == Rank.eighth)) {
+        promotion = Role.queen;
+      }
+      _applyMove(NormalMove(from: origin, to: releaseSq, promotion: promotion));
+    } else {
+      setState(() {
+        _selected = null;
+        _legalTargets = <Square>{};
+      });
+      _selectPulse.stop();
+      _selectPulse.value = 0;
+    }
+  }
+
   bool _onKey(KeyboardEvent event) {
     final ch = event.character?.toLowerCase();
     if (ch == 'q') {
@@ -357,11 +438,27 @@ class _ActiveGameViewState extends State<ActiveGameView>
       onKeyEvent: _onKey,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compactBoard = constraints.maxHeight < 34;
-          final boardDensity =
-              compactBoard ? BoardDensity.compact : BoardDensity.full;
-          final wide = constraints.maxWidth >=
-              (boardDensity == BoardDensity.full ? 86 : 72);
+          final h = constraints.maxHeight;
+          final w = constraints.maxWidth;
+          final BoardDensity density;
+          if (h >= 28 && w >= 60) {
+            density = BoardDensity.full;
+          } else if (h >= 20 && w >= 44) {
+            density = BoardDensity.compact;
+          } else {
+            density = BoardDensity.mini;
+          }
+          final boardW = density == BoardDensity.full
+              ? 64
+              : density == BoardDensity.compact
+                  ? 48
+                  : 28;
+          final wide = w >= boardW + 26;
+          final compact = density != BoardDensity.full;
+          final movesRows = density == BoardDensity.full
+              ? (h ~/ 4).clamp(4, 12)
+              : (density == BoardDensity.compact ? 4 : 2);
+
           final board = AnimatedBuilder(
             animation:
                 Listenable.merge([_moveFlash, _checkPulse, _selectPulse]),
@@ -374,11 +471,13 @@ class _ActiveGameViewState extends State<ActiveGameView>
               lastMoveTo: _lastMoveTo,
               flipped: _flipped,
               checkSquare: _checkSquare(),
-              density: boardDensity,
+              density: density,
+              dragOrigin: _draggingActive ? _pressedAt : null,
+              dragOver: _draggingActive ? _dragOver : null,
               moveFlash: _moveFlash.value,
               checkPulse: _checkPulse.value,
               selectPulse: _selectPulse.value,
-              onCellTap: _selectOrMove,
+              onCellMouse: _onCellMouse,
             ),
           );
           return Container(
@@ -389,7 +488,9 @@ class _ActiveGameViewState extends State<ActiveGameView>
                     children: [
                       board,
                       const SizedBox(width: 1),
-                      Expanded(child: _sidePanel(compact: compactBoard)),
+                      Expanded(
+                          child: _sidePanel(
+                              compact: compact, movesRows: movesRows)),
                     ],
                   )
                 : SingleChildScrollView(
@@ -398,7 +499,7 @@ class _ActiveGameViewState extends State<ActiveGameView>
                       children: [
                         board,
                         const SizedBox(height: 1),
-                        _sidePanel(compact: true),
+                        _sidePanel(compact: true, movesRows: movesRows),
                       ],
                     ),
                   ),
@@ -408,7 +509,7 @@ class _ActiveGameViewState extends State<ActiveGameView>
     );
   }
 
-  Component _sidePanel({required bool compact}) {
+  Component _sidePanel({required bool compact, required int movesRows}) {
     return Container(
       decoration: BoxDecoration(
         color: ChesseverColors.black2,
@@ -429,7 +530,7 @@ class _ActiveGameViewState extends State<ActiveGameView>
             _capturesBlock(),
           ],
           const SizedBox(height: 1),
-          _movesBlock(maxRows: compact ? 4 : 8),
+          _movesBlock(maxRows: movesRows),
           const SizedBox(height: 1),
           _hints(compact: compact),
         ],

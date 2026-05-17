@@ -3,11 +3,10 @@ import 'package:chessever_tui/theme/colors.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
 
-enum BoardDensity { full, compact }
+enum BoardDensity { full, compact, mini }
 
-/// Pixel-art chess board. 7×4 cells, 5-wide sprites with a one-column gutter
-/// on each side, board-tinted last-move and selection highlights, plus a
-/// cursor halo that surrounds the active square without obscuring the piece.
+typedef CellMouseCallback = void Function(Square sq, MouseEvent event);
+
 class BoardView extends StatelessComponent {
   const BoardView({
     super.key,
@@ -20,7 +19,9 @@ class BoardView extends StatelessComponent {
     required this.flipped,
     required this.checkSquare,
     this.density = BoardDensity.full,
-    required this.onCellTap,
+    required this.onCellMouse,
+    this.dragOrigin,
+    this.dragOver,
     this.moveFlash = 0,
     this.checkPulse = 0,
     this.selectPulse = 0,
@@ -35,20 +36,34 @@ class BoardView extends StatelessComponent {
   final Square? checkSquare;
   final bool flipped;
   final BoardDensity density;
-  final ValueChanged<Square> onCellTap;
+  final CellMouseCallback onCellMouse;
+  final Square? dragOrigin;
+  final Square? dragOver;
   final double moveFlash;
   final double checkPulse;
   final double selectPulse;
 
-  int get _cellWidth => density == BoardDensity.full ? 7 : 5;
-  int get _cellHeight => density == BoardDensity.full ? 4 : 2;
-  int get _spriteWidth => density == BoardDensity.full ? 5 : 3;
+  int get _cellWidth => switch (density) {
+        BoardDensity.full => 7,
+        BoardDensity.compact => 5,
+        BoardDensity.mini => 3,
+      };
+
+  int get _cellHeight => switch (density) {
+        BoardDensity.full => 3,
+        BoardDensity.compact => 2,
+        BoardDensity.mini => 1,
+      };
+
+  int get _spriteWidth => switch (density) {
+        BoardDensity.full => 5,
+        BoardDensity.compact => 3,
+        BoardDensity.mini => 1,
+      };
 
   @override
   Component build(BuildContext context) {
-    final children = <Component>[
-      _topBorder(),
-    ];
+    final children = <Component>[_topBorder()];
     for (var i = 0; i < 8; i++) {
       final rank = flipped ? i : 7 - i;
       children.add(_rankRow(rank));
@@ -61,29 +76,25 @@ class BoardView extends StatelessComponent {
     );
   }
 
-  Component _topBorder() {
-    return Row(
-      children: [
-        const SizedBox(width: 2),
-        Text(
-          '╭${'─' * (8 * _cellWidth)}╮',
-          style: TextStyle(color: ChesseverColors.divider),
-        ),
-      ],
-    );
-  }
+  Component _topBorder() => Row(
+        children: [
+          const SizedBox(width: 2),
+          Text(
+            '╭${'─' * (8 * _cellWidth)}╮',
+            style: TextStyle(color: ChesseverColors.divider),
+          ),
+        ],
+      );
 
-  Component _bottomBorder() {
-    return Row(
-      children: [
-        const SizedBox(width: 2),
-        Text(
-          '╰${'─' * (8 * _cellWidth)}╯',
-          style: TextStyle(color: ChesseverColors.divider),
-        ),
-      ],
-    );
-  }
+  Component _bottomBorder() => Row(
+        children: [
+          const SizedBox(width: 2),
+          Text(
+            '╰${'─' * (8 * _cellWidth)}╯',
+            style: TextStyle(color: ChesseverColors.divider),
+          ),
+        ],
+      );
 
   Component _rankRow(int rank) {
     final cells = <Component>[];
@@ -101,35 +112,43 @@ class BoardView extends StatelessComponent {
     );
   }
 
-  Component _rankLabel(int rank) {
-    return Container(
-      width: 2,
-      height: _cellHeight.toDouble(),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            ' ${rank + 1}',
-            style: TextStyle(color: ChesseverColors.tertiaryText),
-          ),
-        ],
-      ),
-    );
-  }
+  Component _rankLabel(int rank) => Container(
+        width: 2,
+        height: _cellHeight.toDouble(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              ' ${rank + 1}',
+              style: TextStyle(color: ChesseverColors.tertiaryText),
+            ),
+          ],
+        ),
+      );
 
   Component _fileLabels() {
-    final labels = <Component>[
-      const SizedBox(width: 3),
-    ];
+    final labels = <Component>[const SizedBox(width: 3)];
     for (var fi = 0; fi < 8; fi++) {
       final file = flipped ? 7 - fi : fi;
       final char = String.fromCharCode('a'.codeUnitAt(0) + file);
+      String label;
+      switch (density) {
+        case BoardDensity.full:
+          label = '   $char   ';
+          break;
+        case BoardDensity.compact:
+          label = '  $char  ';
+          break;
+        case BoardDensity.mini:
+          label = ' $char ';
+          break;
+      }
       labels.add(
         Container(
           width: _cellWidth.toDouble(),
           height: 1,
           child: Text(
-            density == BoardDensity.full ? '   $char   ' : '  $char  ',
+            label,
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
         ),
@@ -155,12 +174,15 @@ class BoardView extends StatelessComponent {
         bg = lastBg;
       }
     }
-    if (sq == selected) {
+    if (sq == selected || sq == dragOrigin) {
       bg = _lerp(
         ChesseverColors.primary,
         ChesseverColors.activeCalendar,
         selectPulse,
       );
+    }
+    if (sq == dragOver && dragOrigin != null && sq != dragOrigin) {
+      bg = _lerp(bg, ChesseverColors.activeCalendar, 0.65);
     }
     if (sq == checkSquare) {
       bg = _lerp(
@@ -173,6 +195,7 @@ class BoardView extends StatelessComponent {
     final isCursor = sq == cursor;
     final isLegalTarget = legalTargets.contains(sq);
     final isCaptureTarget = isLegalTarget && piece != null;
+    final isDragSource = sq == dragOrigin;
 
     final emptyFg = isLight
         ? ChesseverColors.boardLightPixel
@@ -184,26 +207,26 @@ class BoardView extends StatelessComponent {
             ? ChesseverColors.white
             : ChesseverColors.blackPiece);
 
-    final spriteRows = piece == null
-        ? (isLight ? _emptyRows('░') : _emptyRows('▒'))
-        : (density == BoardDensity.full
-            ? PieceSprite.forRole(piece.role).rows
-            : PieceSprite.forRole(piece.role).compactRows);
+    if (isDragSource) {
+      baseFg = _lerp(baseFg, bg, 0.45);
+    }
 
-    // Apply markers onto the sprite rows.
+    final spriteRows = _pieceRows(piece);
+
     final rows = List<String>.from(spriteRows);
     if (isLegalTarget && piece == null) {
-      rows[density == BoardDensity.full ? 2 : 1] =
+      final markerRow = density == BoardDensity.full
+          ? 1
+          : (density == BoardDensity.compact ? 0 : 0);
+      rows[markerRow] =
           _stamp(' ' * _spriteWidth, _spriteWidth ~/ 2, '•');
       baseFg = ChesseverColors.legalDot;
     }
 
     final lines = <Component>[];
     for (var i = 0; i < _cellHeight; i++) {
-      // Cursor halo: chevrons in top-corners of row 0 and bottom-corners of
-      // row 3. Pads to 7 chars so cell width is exact.
-      var line = ' ${rows[i]} ';
-      if (isCursor) {
+      var line = density == BoardDensity.mini ? rows[i] : ' ${rows[i]} ';
+      if (isCursor && _cellHeight >= 2) {
         if (i == 0) {
           line = _stamp(_stamp(line, 0, '▟'), _cellWidth - 1, '▙');
         }
@@ -212,18 +235,21 @@ class BoardView extends StatelessComponent {
         }
       }
       Color fg = baseFg;
-      if (isCursor && (i == 0 || i == _cellHeight - 1)) {
+      if (isCursor && _cellHeight >= 2 && (i == 0 || i == _cellHeight - 1)) {
         fg = ChesseverColors.cursorRing;
       }
-      if (isCaptureTarget && i == 0) {
+      if (isCaptureTarget && _cellHeight >= 2 && i == 0) {
         line = _stamp(line, 0, '▟');
         line = _stamp(line, _cellWidth - 1, '▙');
         fg = ChesseverColors.captureRing;
       }
-      if (isCaptureTarget && i == _cellHeight - 1) {
+      if (isCaptureTarget && _cellHeight >= 2 && i == _cellHeight - 1) {
         line = _stamp(line, 0, '▜');
         line = _stamp(line, _cellWidth - 1, '▛');
         fg = ChesseverColors.captureRing;
+      }
+      if (isCursor && density == BoardDensity.mini) {
+        fg = ChesseverColors.cursorRing;
       }
       lines.add(Text(
         line,
@@ -231,8 +257,10 @@ class BoardView extends StatelessComponent {
       ));
     }
 
-    return GestureDetector(
-      onTap: () => onCellTap(sq),
+    return MouseRegion(
+      opaque: false,
+      onEnter: (e) => onCellMouse(sq, e),
+      onHover: (e) => onCellMouse(sq, e),
       child: Container(
         width: _cellWidth.toDouble(),
         height: _cellHeight.toDouble(),
@@ -243,6 +271,39 @@ class BoardView extends StatelessComponent {
       ),
     );
   }
+
+  List<String> _pieceRows(Piece? piece) {
+    if (piece == null) {
+      switch (density) {
+        case BoardDensity.full:
+          return _emptyRowsFull();
+        case BoardDensity.compact:
+          return _emptyRowsCompact();
+        case BoardDensity.mini:
+          return [' '];
+      }
+    }
+    final sprite = PieceSprite.forRole(piece.role);
+    switch (density) {
+      case BoardDensity.full:
+        return sprite.rows;
+      case BoardDensity.compact:
+        return sprite.compactRows;
+      case BoardDensity.mini:
+        return [sprite.mini];
+    }
+  }
+
+  List<String> _emptyRowsFull() {
+    final hi = density == BoardDensity.full;
+    return [
+      '     ',
+      hi ? '  ·  ' : '     ',
+      '     ',
+    ];
+  }
+
+  List<String> _emptyRowsCompact() => const ['   ', '   '];
 
   Color _lerp(Color a, Color b, double t) {
     final tt = t.clamp(0.0, 1.0);
@@ -261,12 +322,5 @@ class BoardView extends StatelessComponent {
     if (chRunes.isEmpty) return line;
     units[index] = chRunes.first;
     return String.fromCharCodes(units);
-  }
-
-  List<String> _emptyRows(String pixel) {
-    if (density == BoardDensity.full) {
-      return ['$pixel   $pixel', '     ', '  $pixel  ', '     '];
-    }
-    return ['$pixel $pixel', ' $pixel '];
   }
 }
