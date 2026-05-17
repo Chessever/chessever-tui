@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:io' as io show File;
 
 import 'package:chessever_tui/app.dart';
 import 'package:chessever_tui/play/play_config.dart';
@@ -6,7 +7,42 @@ import 'package:chessever_tui/update/updater.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart';
 
-const _version = '0.1.0';
+final String _version = _resolveVersion();
+
+/// Resolves the package version.
+///
+/// 1. Compile-time `--define=chessever.version=X.Y.Z` (set by CI before
+///    `dart compile exe`).
+/// 2. `pubspec.yaml` near the running script — works for `dart run`
+///    from a source checkout.
+/// 3. `'dev'` as a last-resort fallback.
+String _resolveVersion() {
+  const compiled = String.fromEnvironment('chessever.version');
+  if (compiled.isNotEmpty) return compiled;
+
+  for (final candidate in _pubspecCandidates()) {
+    try {
+      if (!candidate.existsSync()) continue;
+      final match = RegExp(r'^version:\s*(\S+)', multiLine: true)
+          .firstMatch(candidate.readAsStringSync());
+      if (match != null) return match.group(1)!;
+    } catch (_) {
+      // Ignore IO/regex failures and try the next candidate.
+    }
+  }
+  return 'dev';
+}
+
+Iterable<io.File> _pubspecCandidates() sync* {
+  yield io.File('pubspec.yaml');
+  try {
+    final scriptDir = io.File.fromUri(Platform.script).parent.path;
+    yield io.File('$scriptDir/pubspec.yaml');
+    yield io.File('$scriptDir/../pubspec.yaml');
+  } catch (_) {
+    // Platform.script may be unusable (compiled exe); skip.
+  }
+}
 
 Future<void> main(List<String> args) async {
   final cli = await _handleCli(args);

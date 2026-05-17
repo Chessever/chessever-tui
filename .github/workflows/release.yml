@@ -66,12 +66,28 @@ jobs:
       - name: dart analyze
         run: dart analyze --fatal-infos
 
+      - name: resolve version
+        id: version
+        shell: bash
+        run: |
+          set -eu
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+          else
+            version="$(grep -E '^version:' pubspec.yaml | awk '{print $2}')"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved version: ${version}"
+
       - name: compile
         shell: bash
+        env:
+          CHESSEVER_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -eu
           mkdir -p build/out
           dart compile exe bin/chessever_tui.dart \
+            --define=chessever.version="${CHESSEVER_VERSION}" \
             -o build/out/chessever${{ matrix.ext }}
           cp build/out/chessever${{ matrix.ext }} build/out/chessever-tui${{ matrix.ext }}
           ls -la build/out
