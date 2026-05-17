@@ -55,6 +55,8 @@ class _ActiveGameViewState extends State<ActiveGameView>
   Square? _dragOver;
   bool _draggingActive = false;
 
+  final List<({Square from, Square to, Role? promotion})> _premoves = [];
+
   late final AnimationController _moveFlash;
   late final AnimationController _checkPulse;
   late final AnimationController _selectPulse;
@@ -98,6 +100,41 @@ class _ActiveGameViewState extends State<ActiveGameView>
 
   bool get _humanToMove =>
       _resultText == null && _position.turn == component.config.humanSide;
+
+  /// Position the user sees + interacts with. Equal to [_position] when no
+  /// premoves are queued; otherwise it's the position after every queued
+  /// premove has been applied (with turn flipped between them so each
+  /// subsequent premove can be entered by the human side).
+  Position get _displayPosition {
+    if (_premoves.isEmpty) return _position;
+    var pos = _position;
+    for (final pm in _premoves) {
+      if (pos.turn != component.config.humanSide) {
+        pos = _flipTurn(pos);
+      }
+      final legal = makeLegalMoves(pos);
+      if (!(legal[pm.from]?.contains(pm.to) ?? false)) break;
+      pos = pos.playUnchecked(
+        NormalMove(from: pm.from, to: pm.to, promotion: pm.promotion),
+      );
+    }
+    return pos;
+  }
+
+  Position _flipTurn(Position pos) {
+    try {
+      final parts = pos.fen.split(' ');
+      if (parts.length < 2) return pos;
+      parts[1] = parts[1] == 'w' ? 'b' : 'w';
+      return Chess.fromSetup(Setup.parseFen(parts.join(' ')));
+    } catch (_) {
+      return pos;
+    }
+  }
+
+  Set<Square> get _premoveFromSquares =>
+      {for (final pm in _premoves) pm.from};
+  Set<Square> get _premoveToSquares => {for (final pm in _premoves) pm.to};
 
   Square? _checkSquare() {
     if (!_position.isCheck) return null;
@@ -167,8 +204,31 @@ class _ActiveGameViewState extends State<ActiveGameView>
       }
       if (_position.turn != component.config.humanSide) {
         unawaited(_runEngine());
+      } else if (_premoves.isNotEmpty) {
+        scheduleMicrotask(_drainPremoves);
       }
     }
+  }
+
+  void _drainPremoves() {
+    while (_premoves.isNotEmpty) {
+      final pm = _premoves.removeAt(0);
+      if (!_humanToMove) {
+        // Lost the turn somehow; bail safely.
+        setState(() {});
+        return;
+      }
+      final legal = makeLegalMoves(_position);
+      final ok = legal[pm.from]?.contains(pm.to) ?? false;
+      if (ok) {
+        _applyMove(
+          NormalMove(from: pm.from, to: pm.to, promotion: pm.promotion),
+        );
+        return;
+      }
+    }
+    // Queue drained without finding a valid move; just refresh.
+    setState(() {});
   }
 
   void _playMoveSfx({
@@ -259,17 +319,23 @@ class _ActiveGameViewState extends State<ActiveGameView>
   }
 
   void _selectOrMove(Square sq) {
-    if (!_humanToMove) return;
+    if (_resultText != null) return;
+    final position = _displayPosition;
+    final humanSide = component.config.humanSide;
+
     if (_selected == null) {
-      final piece = _position.board.pieceAt(sq);
-      if (piece == null || piece.color != _position.turn) return;
-      final legal = makeLegalMoves(_position)[sq];
+      final piece = position.board.pieceAt(sq);
+      if (piece == null || piece.color != humanSide) return;
+      final legal = makeLegalMoves(position)[sq];
       if (legal == null || legal.isEmpty) return;
       setState(() {
         _selected = sq;
         _legalTargets = legal.toSet();
       });
-      _selectPulse.repeat(reverse: true, period: const Duration(milliseconds: 520));
+      _selectPulse.repeat(
+        reverse: true,
+        period: const Duration(milliseconds: 520),
+      );
       return;
     }
     if (sq == _selected) {
@@ -282,18 +348,23 @@ class _ActiveGameViewState extends State<ActiveGameView>
       return;
     }
     if (_legalTargets.contains(sq)) {
-      final piece = _position.board.pieceAt(_selected!);
+      final piece = position.board.pieceAt(_selected!);
       Role? promotion;
       if (piece?.role == Role.pawn &&
           (sq.rank == Rank.first || sq.rank == Rank.eighth)) {
         promotion = Role.queen;
       }
-      _applyMove(NormalMove(from: _selected!, to: sq, promotion: promotion));
+      final move = NormalMove(from: _selected!, to: sq, promotion: promotion);
+      if (_humanToMove && _premoves.isEmpty) {
+        _applyMove(move);
+      } else {
+        _queuePremove(move);
+      }
       return;
     }
-    final piece = _position.board.pieceAt(sq);
-    if (piece != null && piece.color == _position.turn) {
-      final legal = makeLegalMoves(_position)[sq];
+    final piece = position.board.pieceAt(sq);
+    if (piece != null && piece.color == humanSide) {
+      final legal = makeLegalMoves(position)[sq];
       setState(() {
         _selected = sq;
         _legalTargets = legal?.toSet() ?? <Square>{};
@@ -301,8 +372,18 @@ class _ActiveGameViewState extends State<ActiveGameView>
     }
   }
 
+  void _queuePremove(NormalMove move) {
+    setState(() {
+      _premoves.add((from: move.from, to: move.to, promotion: move.promotion));
+      _selected = null;
+      _legalTargets = <Square>{};
+    });
+    _selectPulse.stop();
+    _selectPulse.value = 0;
+  }
+
   void _onCellMouse(Square sq, MouseEvent e) {
-    if (!_humanToMove) return;
+    if (_resultText != null) return;
     final pressed = e.pressed || e.isPrimaryButtonDown;
 
     if (pressed && !_mouseDown) {
@@ -313,8 +394,9 @@ class _ActiveGameViewState extends State<ActiveGameView>
     }
     if (_mouseDown && pressed) {
       if (sq != _pressedAt && !_draggingActive) {
-        final originPiece = _position.board.pieceAt(_pressedAt!);
-        if (originPiece != null && originPiece.color == _position.turn) {
+        final originPiece = _displayPosition.board.pieceAt(_pressedAt!);
+        if (originPiece != null &&
+            originPiece.color == component.config.humanSide) {
           _draggingActive = true;
           _enterDragMode(_pressedAt!);
         }
@@ -341,9 +423,11 @@ class _ActiveGameViewState extends State<ActiveGameView>
   }
 
   void _enterDragMode(Square origin) {
-    final piece = _position.board.pieceAt(origin);
-    if (piece == null || piece.color != _position.turn) return;
-    final legal = makeLegalMoves(_position)[origin];
+    final position = _displayPosition;
+    final humanSide = component.config.humanSide;
+    final piece = position.board.pieceAt(origin);
+    if (piece == null || piece.color != humanSide) return;
+    final legal = makeLegalMoves(position)[origin];
     if (legal == null || legal.isEmpty) return;
     setState(() {
       _selected = origin;
@@ -358,13 +442,19 @@ class _ActiveGameViewState extends State<ActiveGameView>
 
   void _completeDrag(Square origin, Square releaseSq) {
     if (_selected == origin && _legalTargets.contains(releaseSq)) {
-      final piece = _position.board.pieceAt(origin);
+      final piece = _displayPosition.board.pieceAt(origin);
       Role? promotion;
       if (piece?.role == Role.pawn &&
           (releaseSq.rank == Rank.first || releaseSq.rank == Rank.eighth)) {
         promotion = Role.queen;
       }
-      _applyMove(NormalMove(from: origin, to: releaseSq, promotion: promotion));
+      final move =
+          NormalMove(from: origin, to: releaseSq, promotion: promotion);
+      if (_humanToMove && _premoves.isEmpty) {
+        _applyMove(move);
+      } else {
+        _queuePremove(move);
+      }
     } else {
       setState(() {
         _selected = null;
@@ -393,6 +483,7 @@ class _ActiveGameViewState extends State<ActiveGameView>
       setState(() {
         _selected = null;
         _legalTargets = <Square>{};
+        _premoves.clear();
       });
       _selectPulse.stop();
       _selectPulse.value = 0;
@@ -441,34 +532,41 @@ class _ActiveGameViewState extends State<ActiveGameView>
           final h = constraints.maxHeight;
           final w = constraints.maxWidth;
           // Board footprint (board only, no side panel):
-          //   full    8*7 + 4 = 60 cols, 8*3 + 3 = 27 rows
-          //   compact 8*5 + 4 = 44 cols, 8*2 + 3 = 19 rows
+          //   full    8*7 + 4 = 60 cols, 8*4 + 3 = 35 rows
+          //   compact 8*7 + 4 = 60 cols, 8*3 + 3 = 27 rows
+          //   small   8*5 + 4 = 44 cols, 8*2 + 3 = 19 rows
           //   mini    8*3 + 4 = 28 cols, 8*1 + 3 = 11 rows
           final BoardDensity density;
-          if (h >= 28 && w >= 60) {
+          if (h >= 36 && w >= 60) {
             density = BoardDensity.full;
-          } else if (h >= 20 && w >= 44) {
+          } else if (h >= 28 && w >= 60) {
             density = BoardDensity.compact;
+          } else if (h >= 20 && w >= 44) {
+            density = BoardDensity.small;
           } else {
             density = BoardDensity.mini;
           }
-          final boardW = density == BoardDensity.full
-              ? 64
-              : density == BoardDensity.compact
-                  ? 48
-                  : 32;
+          final boardW = switch (density) {
+            BoardDensity.full => 64,
+            BoardDensity.compact => 64,
+            BoardDensity.small => 48,
+            BoardDensity.mini => 32,
+          };
           final wide = w >= boardW + 26;
-          final compact = density != BoardDensity.full;
-          final movesRows = density == BoardDensity.full
-              ? (h ~/ 4).clamp(4, 12)
-              : (density == BoardDensity.compact ? 4 : 2);
+          final useCompactPanel = density != BoardDensity.full;
+          final movesRows = switch (density) {
+            BoardDensity.full => (h ~/ 4).clamp(4, 12),
+            BoardDensity.compact => (h ~/ 4).clamp(3, 8),
+            BoardDensity.small => 3,
+            BoardDensity.mini => 2,
+          };
           final showSidePanel = density != BoardDensity.mini || h >= 14;
 
           final board = AnimatedBuilder(
             animation:
                 Listenable.merge([_moveFlash, _checkPulse, _selectPulse]),
             builder: (context, _) => BoardView(
-              position: _position,
+              position: _displayPosition,
               cursor: _cursor,
               selected: _selected,
               legalTargets: _legalTargets,
@@ -479,6 +577,8 @@ class _ActiveGameViewState extends State<ActiveGameView>
               density: density,
               dragOrigin: _draggingActive ? _pressedAt : null,
               dragOver: _draggingActive ? _dragOver : null,
+              premoveFrom: _premoveFromSquares,
+              premoveTo: _premoveToSquares,
               moveFlash: _moveFlash.value,
               checkPulse: _checkPulse.value,
               selectPulse: _selectPulse.value,
@@ -495,7 +595,7 @@ class _ActiveGameViewState extends State<ActiveGameView>
                       const SizedBox(width: 1),
                       Expanded(
                           child: _sidePanel(
-                              compact: compact, movesRows: movesRows)),
+                              compact: useCompactPanel, movesRows: movesRows)),
                     ],
                   )
                 : SingleChildScrollView(

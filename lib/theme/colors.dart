@@ -24,8 +24,11 @@ class ChesseverColors {
   static const placeholder = Color.fromRGB(0x48, 0x48, 0x4A);
   static const inactiveTab = Color.fromRGB(0x66, 0x66, 0x66);
   static const activeCalendar = Color.fromRGB(0x68, 0xD3, 0xFF);
-  static const lastMoveLight = Color.fromRGB(0xAD, 0xB9, 0xCF);
-  static const lastMoveDark = Color.fromRGB(0x9D, 0xAA, 0xC2);
+  // Lichess-style amber for last-move highlight + orange for premoves.
+  static const lastMoveLight = Color.fromRGB(0xE3, 0xC5, 0x4A);
+  static const lastMoveDark = Color.fromRGB(0xB8, 0x97, 0x36);
+  static const premoveLight = Color.fromRGB(0xE6, 0x82, 0x3A);
+  static const premoveDark = Color.fromRGB(0xB8, 0x5A, 0x22);
 
   // Board (default Chessever "blue-slate" theme).
   static const boardLight = Color.fromRGB(0xD1, 0xE9, 0xE9);

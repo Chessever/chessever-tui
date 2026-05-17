@@ -3,7 +3,7 @@ import 'package:chessever_tui/theme/colors.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
 
-enum BoardDensity { full, compact, mini }
+enum BoardDensity { full, compact, small, mini }
 
 typedef CellMouseCallback = void Function(Square sq, MouseEvent event);
 
@@ -22,6 +22,8 @@ class BoardView extends StatelessComponent {
     required this.onCellMouse,
     this.dragOrigin,
     this.dragOver,
+    this.premoveFrom = const <Square>{},
+    this.premoveTo = const <Square>{},
     this.moveFlash = 0,
     this.checkPulse = 0,
     this.selectPulse = 0,
@@ -39,25 +41,30 @@ class BoardView extends StatelessComponent {
   final CellMouseCallback onCellMouse;
   final Square? dragOrigin;
   final Square? dragOver;
+  final Set<Square> premoveFrom;
+  final Set<Square> premoveTo;
   final double moveFlash;
   final double checkPulse;
   final double selectPulse;
 
   int get _cellWidth => switch (density) {
         BoardDensity.full => 7,
-        BoardDensity.compact => 5,
+        BoardDensity.compact => 7,
+        BoardDensity.small => 5,
         BoardDensity.mini => 3,
       };
 
   int get _cellHeight => switch (density) {
-        BoardDensity.full => 3,
-        BoardDensity.compact => 2,
+        BoardDensity.full => 4,
+        BoardDensity.compact => 3,
+        BoardDensity.small => 2,
         BoardDensity.mini => 1,
       };
 
   int get _spriteWidth => switch (density) {
         BoardDensity.full => 5,
-        BoardDensity.compact => 3,
+        BoardDensity.compact => 5,
+        BoardDensity.small => 3,
         BoardDensity.mini => 1,
       };
 
@@ -134,9 +141,10 @@ class BoardView extends StatelessComponent {
       String label;
       switch (density) {
         case BoardDensity.full:
+        case BoardDensity.compact:
           label = '   $char   ';
           break;
-        case BoardDensity.compact:
+        case BoardDensity.small:
           label = '  $char  ';
           break;
         case BoardDensity.mini:
@@ -173,6 +181,11 @@ class BoardView extends StatelessComponent {
       } else {
         bg = lastBg;
       }
+    }
+    if (premoveFrom.contains(sq) || premoveTo.contains(sq)) {
+      bg = isLight
+          ? ChesseverColors.premoveLight
+          : ChesseverColors.premoveDark;
     }
     if (sq == selected || sq == dragOrigin) {
       bg = _lerp(
@@ -251,30 +264,24 @@ class BoardView extends StatelessComponent {
   }
 
   List<String> _pieceRows(Piece? piece) {
-    if (piece == null) {
-      switch (density) {
-        case BoardDensity.full:
-          return _emptyRowsFull();
-        case BoardDensity.compact:
-          return _emptyRowsCompact();
-        case BoardDensity.mini:
-          return [' '];
-      }
-    }
+    if (piece == null) return _emptyRows();
     final sprite = PieceSprite.forRole(piece.role);
     switch (density) {
       case BoardDensity.full:
-        return sprite.rows;
+        return sprite.extended;
       case BoardDensity.compact:
-        return sprite.compactRows;
+        return sprite.compact;
+      case BoardDensity.small:
+        return sprite.small;
       case BoardDensity.mini:
         return [sprite.mini];
     }
   }
 
-  List<String> _emptyRowsFull() => const ['     ', '     ', '     '];
-
-  List<String> _emptyRowsCompact() => const ['   ', '   '];
+  List<String> _emptyRows() {
+    final blank = ' ' * _spriteWidth;
+    return List<String>.filled(_cellHeight, blank);
+  }
 
   Color _lerp(Color a, Color b, double t) {
     final tt = t.clamp(0.0, 1.0);
