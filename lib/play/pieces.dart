@@ -1,11 +1,15 @@
 import 'package:dartchess/dartchess.dart';
 
-/// Head-only pixel-art glyphs. Each role has a distinctive crown/top so pieces
-/// are recognizable at a glance even at compact density.
+/// Pieces are rendered with the real Unicode chess glyphs at the core
+/// (♟♞♝♜♛♚) framed by piece-specific outline strokes. The chess glyph is
+/// instantly recognizable to anyone who has seen a chess board; the strokes
+/// (battlements, mitre apex, crown spikes, royal brackets, knight ear, …)
+/// add a distinct silhouette so pieces remain readable even when the glyph
+/// itself doesn't render with full detail in some terminal fonts.
 ///
-///   full   = 5×3 (column gutter on each side of a 7-wide cell)
-///   compact= 3×2 (single-column gutter inside a 5-wide cell)
-///   mini   = 1×1 (single glyph; tight density fallback)
+///   full    = 5×3 (column gutter on each side of a 7-wide cell)
+///   compact = 3×2 (single-column gutter inside a 5-wide cell)
+///   mini    = 1×1 (single glyph; tight density fallback)
 class PieceSprite {
   const PieceSprite(this.rows, this.compactRows, this.mini);
   final List<String> rows; // 3 strings × 5 cols
@@ -16,72 +20,72 @@ class PieceSprite {
     Role.pawn: PieceSprite(
       [
         '     ',
-        '  ●  ',
-        ' ▟█▙ ',
+        '  ♟  ',
+        '  ─  ',
       ],
       [
-        ' ● ',
-        ' █ ',
+        ' ♟ ',
+        ' ─ ',
       ],
       '♟',
     ),
     Role.knight: PieceSprite(
       [
-        ' ▟▀▘ ',
-        '▟██▙ ',
-        '  ██▖',
+        ' ╱▘  ',
+        ' ♞▕  ',
+        '  ─  ',
       ],
       [
-        '▟▀▖',
-        ' ██',
+        '╱♞ ',
+        ' ─ ',
       ],
       '♞',
     ),
     Role.bishop: PieceSprite(
       [
-        '  ▲  ',
-        ' ▟▼▙ ',
-        ' ▝█▘ ',
+        '  ╱╲ ',
+        '  ♝  ',
+        ' └─┘ ',
       ],
       [
         ' ▲ ',
-        '▝█▘',
+        ' ♝ ',
       ],
       '♝',
     ),
     Role.rook: PieceSprite(
       [
-        '█ █ █',
-        ' ███ ',
-        ' ███ ',
+        ' ┌┬┐ ',
+        ' │♜│ ',
+        ' └─┘ ',
       ],
       [
-        '▌▐▌',
-        '███',
+        '┌┐ ',
+        '│♜│',
       ],
       '♜',
     ),
     Role.queen: PieceSprite(
       [
-        '◆ ▲ ◆',
-        '▝▟█▙▘',
-        ' ███ ',
+        ' ▴▴▴ ',
+        ' (♛) ',
+        ' └─┘ ',
       ],
       [
-        '◆▲◆',
-        '███',
+        '▴▴▴',
+        ' ♛ ',
       ],
       '♛',
     ),
     Role.king: PieceSprite(
       [
-        '  ╋  ',
-        ' ▟█▙ ',
-        ' ███ ',
+        '  ✚  ',
+        ' [♚] ',
+        ' └─┘ ',
       ],
       [
-        ' ╋ ',
-        '███',
+        ' ✚ ',
+        ' ♚ ',
       ],
       '♚',
     ),
