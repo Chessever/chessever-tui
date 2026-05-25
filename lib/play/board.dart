@@ -3,7 +3,7 @@ import 'package:chessever_tui/theme/colors.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:nocterm/nocterm.dart' hide Position;
 
-enum BoardDensity { full, compact, small, mini }
+enum BoardDensity { xl, full, compact, small, mini }
 
 typedef CellMouseCallback = void Function(Square sq, MouseEvent event);
 
@@ -48,13 +48,15 @@ class BoardView extends StatelessComponent {
   final double selectPulse;
 
   int get _cellWidth => switch (density) {
+        BoardDensity.xl => 9,
         BoardDensity.full => 7,
         BoardDensity.compact => 7,
-        BoardDensity.small => 5,
+        BoardDensity.small => 7,
         BoardDensity.mini => 3,
       };
 
   int get _cellHeight => switch (density) {
+        BoardDensity.xl => 6,
         BoardDensity.full => 4,
         BoardDensity.compact => 3,
         BoardDensity.small => 2,
@@ -62,21 +64,30 @@ class BoardView extends StatelessComponent {
       };
 
   int get _spriteWidth => switch (density) {
+        BoardDensity.xl => 7,
         BoardDensity.full => 5,
         BoardDensity.compact => 5,
-        BoardDensity.small => 3,
+        BoardDensity.small => 5,
         BoardDensity.mini => 1,
       };
 
+  /// Drop borders + file labels at the tightest densities to save rows
+  /// on small terminals (the user can still read rank/file from cursor).
+  bool get _showChrome =>
+      density != BoardDensity.small && density != BoardDensity.mini;
+
   @override
   Component build(BuildContext context) {
-    final children = <Component>[_topBorder()];
+    final children = <Component>[];
+    if (_showChrome) children.add(_topBorder());
     for (var i = 0; i < 8; i++) {
       final rank = flipped ? i : 7 - i;
       children.add(_rankRow(rank));
     }
-    children.add(_bottomBorder());
-    children.add(_fileLabels());
+    if (_showChrome) {
+      children.add(_bottomBorder());
+      children.add(_fileLabels());
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: children,
@@ -105,14 +116,18 @@ class BoardView extends StatelessComponent {
 
   Component _rankRow(int rank) {
     final cells = <Component>[];
-    cells.add(_rankLabel(rank));
-    cells.add(Text('│', style: TextStyle(color: ChesseverColors.divider)));
+    if (_showChrome) {
+      cells.add(_rankLabel(rank));
+      cells.add(Text('│', style: TextStyle(color: ChesseverColors.divider)));
+    }
     for (var fi = 0; fi < 8; fi++) {
       final file = flipped ? 7 - fi : fi;
       final sq = Square.fromCoords(File(file), Rank(rank));
       cells.add(_cell(sq));
     }
-    cells.add(Text('│', style: TextStyle(color: ChesseverColors.divider)));
+    if (_showChrome) {
+      cells.add(Text('│', style: TextStyle(color: ChesseverColors.divider)));
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: cells,
@@ -140,12 +155,13 @@ class BoardView extends StatelessComponent {
       final char = String.fromCharCode('a'.codeUnitAt(0) + file);
       String label;
       switch (density) {
+        case BoardDensity.xl:
+          label = '    $char    ';
+          break;
         case BoardDensity.full:
         case BoardDensity.compact:
-          label = '   $char   ';
-          break;
         case BoardDensity.small:
-          label = '  $char  ';
+          label = '   $char   ';
           break;
         case BoardDensity.mini:
           label = ' $char ';
@@ -268,6 +284,8 @@ class BoardView extends StatelessComponent {
     if (piece == null) return _emptyRows();
     final sprite = PieceSprite.forRole(piece.role);
     switch (density) {
+      case BoardDensity.xl:
+        return PieceSprite.halfBlockRows(sprite.xlarge);
       case BoardDensity.full:
         return PieceSprite.halfBlockRows(sprite.extended);
       case BoardDensity.compact:

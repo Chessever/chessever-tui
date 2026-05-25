@@ -109,36 +109,57 @@ class _GameViewerState extends State<GameViewer> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final density = _pickDensity(constraints);
+            final boardW = switch (density) {
+              BoardDensity.xl => 76,
+              BoardDensity.full => 64,
+              BoardDensity.compact => 64,
+              BoardDensity.small => 56,
+              BoardDensity.mini => 28,
+            };
+            final wide = constraints.maxWidth >= boardW + 24;
+            final board = pos == null
+                ? _missingFen()
+                : BoardView(
+                    position: pos,
+                    cursor: Square.a1,
+                    selected: null,
+                    legalTargets: const <Square>{},
+                    lastMoveFrom: lm.from,
+                    lastMoveTo: lm.to,
+                    flipped: _flipped,
+                    checkSquare: checkSquare,
+                    density: density,
+                    onCellMouse: (_, __) {},
+                  );
+            final panel = _SidePanel(game: _game);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _Header(game: _game, round: component.round),
                 Expanded(
-                  child: pos == null
-                      ? _missingFen()
-                      : Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 2, vertical: 1),
-                          child: Row(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 1, vertical: 1),
+                    child: wide
+                        ? Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              BoardView(
-                                position: pos,
-                                cursor: Square.a1,
-                                selected: null,
-                                legalTargets: const <Square>{},
-                                lastMoveFrom: lm.from,
-                                lastMoveTo: lm.to,
-                                flipped: _flipped,
-                                checkSquare: checkSquare,
-                                density: density,
-                                onCellMouse: (_, __) {},
-                              ),
+                              board,
                               const SizedBox(width: 2),
-                              Expanded(child: _SidePanel(game: _game)),
+                              Expanded(child: panel),
                             ],
+                          )
+                        : SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                board,
+                                const SizedBox(height: 1),
+                                panel,
+                              ],
+                            ),
                           ),
-                        ),
+                  ),
                 ),
                 const _Footer(),
               ],
@@ -160,9 +181,10 @@ class _GameViewerState extends State<GameViewer> {
   BoardDensity _pickDensity(BoxConstraints c) {
     final w = c.maxWidth;
     final h = c.maxHeight;
-    if (w >= 80 && h >= 36) return BoardDensity.full;
-    if (w >= 70 && h >= 28) return BoardDensity.compact;
-    if (w >= 50 && h >= 20) return BoardDensity.small;
+    if (h >= 52 && w >= 76) return BoardDensity.xl;
+    if (h >= 36 && w >= 60) return BoardDensity.full;
+    if (h >= 28 && w >= 60) return BoardDensity.compact;
+    if (h >= 16 && w >= 56) return BoardDensity.small;
     return BoardDensity.mini;
   }
 }

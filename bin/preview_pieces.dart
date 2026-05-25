@@ -20,12 +20,13 @@ String _fg(List<int> c) => '\x1b[38;2;${c[0]};${c[1]};${c[2]}m';
 String _bg(List<int> c) => '\x1b[48;2;${c[0]};${c[1]};${c[2]}m';
 const _reset = '\x1b[0m';
 
-enum _Density { full, compact, small, mini }
+enum _Density { xl, full, compact, small, mini }
 
 ({int w, int h, int sw}) _dims(_Density d) => switch (d) {
+      _Density.xl => (w: 9, h: 6, sw: 7),
       _Density.full => (w: 7, h: 4, sw: 5),
       _Density.compact => (w: 7, h: 3, sw: 5),
-      _Density.small => (w: 5, h: 2, sw: 3),
+      _Density.small => (w: 7, h: 2, sw: 5),
       _Density.mini => (w: 3, h: 1, sw: 1),
     };
 
@@ -37,6 +38,8 @@ List<String> _pieceRows(_Density d, Piece? p) {
   }
   final s = PieceSprite.forRole(p.role);
   switch (d) {
+    case _Density.xl:
+      return PieceSprite.halfBlockRows(s.xlarge);
     case _Density.full:
       return PieceSprite.halfBlockRows(s.extended);
     case _Density.compact:
@@ -86,8 +89,8 @@ void _render(Position pos, _Density d) {
   for (var f = 0; f < 8; f++) {
     final ch = String.fromCharCode('a'.codeUnitAt(0) + f);
     final pad = switch (d) {
-      _Density.full || _Density.compact => '   $ch   ',
-      _Density.small => '  $ch  ',
+      _Density.xl => '    $ch    ',
+      _Density.full || _Density.compact || _Density.small => '   $ch   ',
       _Density.mini => ' $ch ',
     };
     fileLabels.write('${_fg(_label)}$pad$_reset');

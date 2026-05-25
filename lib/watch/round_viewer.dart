@@ -311,17 +311,20 @@ class _GameRow extends StatelessComponent {
     final liveTint = game.isLive
         ? ChesseverColors.red
         : ChesseverColors.tertiaryText;
+    final result = game.status != null && game.status != '*'
+        ? ' ${game.status}'
+        : '';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 1),
       decoration: bg == null ? null : BoxDecoration(color: bg),
       child: Row(
         children: [
           Text(
-            active ? '┃ ' : '  ',
+            active ? '┃' : ' ',
             style: TextStyle(color: ChesseverColors.primary),
           ),
           Text(
-            game.isLive ? '◉ ' : '○ ',
+            game.isLive ? ' ◉ ' : ' ○ ',
             style: TextStyle(color: liveTint),
           ),
           Expanded(
@@ -336,9 +339,17 @@ class _GameRow extends StatelessComponent {
           ),
           if (game.openingName != null)
             Text(
-              ' ${game.openingName!}',
+              '  ${game.openingName!}',
               style: TextStyle(color: ChesseverColors.tertiaryText),
               overflow: TextOverflow.ellipsis,
+            ),
+          if (result.isNotEmpty)
+            Text(
+              result,
+              style: TextStyle(
+                color: ChesseverColors.lightYellow,
+                fontWeight: FontWeight.bold,
+              ),
             ),
         ],
       ),

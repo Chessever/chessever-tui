@@ -532,29 +532,38 @@ class _ActiveGameViewState extends State<ActiveGameView>
           final h = constraints.maxHeight;
           final w = constraints.maxWidth;
           // Board footprint (board only, no side panel):
-          //   full    8*7 + 4 = 60 cols, 8*4 + 3 = 35 rows
-          //   compact 8*7 + 4 = 60 cols, 8*3 + 3 = 27 rows
-          //   small   8*5 + 4 = 44 cols, 8*2 + 3 = 19 rows
-          //   mini    8*3 + 4 = 28 cols, 8*1 + 3 = 11 rows
+          //   xl      8*9 + 4 = 76 cols, 8*6 + 3 = 51 rows  (with chrome)
+          //   full    8*7 + 4 = 60 cols, 8*4 + 3 = 35 rows  (with chrome)
+          //   compact 8*7 + 4 = 60 cols, 8*3 + 3 = 27 rows  (with chrome)
+          //   small   8*7     = 56 cols, 8*2     = 16 rows  (NO chrome)
+          //   mini    8*3     = 24 cols, 8*1     =  8 rows  (NO chrome)
+          // Density picker always prefers the largest sprite that fits
+          // so an 80×24 terminal lands on `small` (5×4 px pieces), not
+          // the older 3×4 px tier.
           final BoardDensity density;
-          if (h >= 36 && w >= 60) {
+          if (h >= 52 && w >= 76) {
+            density = BoardDensity.xl;
+          } else if (h >= 36 && w >= 60) {
             density = BoardDensity.full;
           } else if (h >= 28 && w >= 60) {
             density = BoardDensity.compact;
-          } else if (h >= 20 && w >= 44) {
+          } else if (h >= 16 && w >= 56) {
             density = BoardDensity.small;
           } else {
             density = BoardDensity.mini;
           }
           final boardW = switch (density) {
+            BoardDensity.xl => 76,
             BoardDensity.full => 64,
             BoardDensity.compact => 64,
-            BoardDensity.small => 48,
-            BoardDensity.mini => 32,
+            BoardDensity.small => 56,
+            BoardDensity.mini => 28,
           };
           final wide = w >= boardW + 26;
-          final useCompactPanel = density != BoardDensity.full;
+          final useCompactPanel = density != BoardDensity.full &&
+              density != BoardDensity.xl;
           final movesRows = switch (density) {
+            BoardDensity.xl => (h ~/ 4).clamp(6, 14),
             BoardDensity.full => (h ~/ 4).clamp(4, 12),
             BoardDensity.compact => (h ~/ 4).clamp(3, 8),
             BoardDensity.small => 3,

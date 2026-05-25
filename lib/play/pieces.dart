@@ -11,54 +11,67 @@ import 'package:dartchess/dartchess.dart';
 /// unique top-row pattern AND a unique body shape so the eye separates
 /// pieces at a glance:
 ///
-///   pawn   — single-pixel head, no neighbors, smallest
-///   knight — asymmetric, eye-notch in face, only non-symmetric piece
-///   bishop — cleft mitre + 1-px-wide neck (no other piece has thin neck)
-///   rook   — straight castellated 3-turret + dead-straight columns
-///   queen  — multi-spike crown + curving shoulders (▀███▀)
-///   king   — wide horizontal cross-bar (▄▄█▄▄), wider than body
+///   pawn   — single isolated round head, narrow stem, flared base
+///   knight — asymmetric horse profile with eye-notch in face
+///   bishop — cleft mitre (visible gap at tip) + 1-pixel-wide neck
+///   rook   — multi-turret battlement + dead-straight column body
+///   queen  — multi-spike crown + curving shoulders flaring outward
+///   king   — wide cross-bar wider than its body (▄▄█▄▄ family)
 ///
-/// Sizes:
-///   extended : 5 cols × 8 px (renders 5×4 chars) — full density
-///   compact  : 5 cols × 6 px (renders 5×3 chars) — compact density
-///   small    : 3 cols × 4 px (renders 3×2 chars) — small density
+/// Sizes (cell dimensions = sprite + 2 cols horizontal padding):
+///   xlarge   : 7 cols × 12 px (renders 7×6 chars) — huge terminals
+///   extended : 5 cols × 8 px  (renders 5×4 chars) — full density
+///   compact  : 5 cols × 6 px  (renders 5×3 chars) — compact density
+///   small    : 5 cols × 4 px  (renders 5×2 chars) — small density
 ///   mini     : 1 unicode glyph                    — mini density
 class PieceSprite {
   const PieceSprite({
+    required this.xlarge,
     required this.extended,
     required this.compact,
     required this.small,
     required this.mini,
   });
 
-  /// Pixel rows. Even count required (paired top/bottom for half-block).
+  final List<String> xlarge;
   final List<String> extended;
   final List<String> compact;
   final List<String> small;
   final String mini;
 
   static const Map<Role, PieceSprite> _glyphs = {
-    // Pawn — tiny isolated head, narrow stem, wide flat base.
-    // Renders as:
-    //     ▄
-    //    ▀█▀
-    //    ▄█▄
-    //   █████
+    // PAWN — isolated round head, narrow stem, wide flat base. Only
+    // piece whose head sits ABOVE empty pixels (the airspace makes it
+    // read as "small").
     Role.pawn: PieceSprite(
+      // 7×12 xlarge — full Staunton pawn silhouette.
+      // Renders 6 char rows: arc, head, neck-top, neck-bot, hip, base.
+      xlarge: [
+        '.......',
+        '..###..',
+        '.#####.',
+        '.#####.',
+        '..###..',
+        '...#...',
+        '...#...',
+        '..###..',
+        '.#####.',
+        '.#####.',
+        '#######',
+        '#######',
+      ],
+      // 5×8 extended.
       extended: [
         '.....',
         '..#..',
         '.###.',
-        '..#..',
+        '.###.',
         '..#..',
         '.###.',
         '#####',
         '#####',
       ],
-      // Compact:
-      //    ▄
-      //   ▀█▀
-      //   ▄███▄
+      // 5×6 compact.
       compact: [
         '.....',
         '..#..',
@@ -67,27 +80,36 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
-      // Small:
-      //   ▄
-      //  ███
+      // 5×4 small.
       small: [
-        '...',
-        '.#.',
-        '###',
-        '###',
+        '.....',
+        '..#..',
+        '.###.',
+        '#####',
       ],
       mini: '♟',
     ),
 
-    // Knight — asymmetric horse profile facing left. Ear top-left, mass
-    // sloping bottom-right, eye-notch in face row. Only piece with no
-    // bilateral symmetry — instantly readable.
-    // Renders as:
-    //   ▄██▄
-    //   ██▀██
-    //    ▀███
-    //   ▄████
+    // KNIGHT — asymmetric horse profile facing left. Ear top-left,
+    // mass sloping bottom-right, eye-notch in face row. Only piece
+    // with no bilateral symmetry.
     Role.knight: PieceSprite(
+      // 7×12 xlarge — ear, mane, head, eye notch, neck angled right,
+      // chest, base.
+      xlarge: [
+        '.......',
+        '..##...',
+        '.####..',
+        '######.',
+        '##.####',
+        '#######',
+        '.######',
+        '..#####',
+        '...####',
+        '..#####',
+        '.######',
+        '#######',
+      ],
       extended: [
         '.##..',
         '####.',
@@ -98,10 +120,6 @@ class PieceSprite {
         '.####',
         '#####',
       ],
-      // Compact:
-      //   ▄██▄
-      //   ▀█▄██
-      //   ▄▄███
       compact: [
         '.##..',
         '####.',
@@ -110,28 +128,37 @@ class PieceSprite {
         '..###',
         '#####',
       ],
-      // Small:
-      //   ██▄
-      //   ▄██
+      // Small — keep asymmetry as the identifier.
       small: [
-        '##.',
-        '###',
-        '.##',
-        '###',
+        '.##..',
+        '####.',
+        '.####',
+        '#####',
       ],
       mini: '♞',
     ),
 
-    // Bishop — cleft mitre on top + uniquely thin 1-pixel neck. The
-    // cleft (split point) makes top read as TWO ears with a valley
-    // between. The hair-thin neck `  █  ` is the bishop's body
-    // signature — no other piece narrows that far.
-    // Renders as:
-    //    ▀▄▀
-    //    ███
-    //     █
-    //   ▄███▄
+    // BISHOP — cleft mitre with visible GAP at tip + uniquely thin
+    // 1-pixel-wide neck. The visible cleft (column 3 = empty) splits
+    // the mitre into two ears — no other piece has a hole in its body.
     Role.bishop: PieceSprite(
+      // 7×12 xlarge — tip, cleft (with REAL gap), mitre, thin neck,
+      // shoulder, base.
+      xlarge: [
+        '.......',
+        '...#...',
+        '..#.#..',
+        '.##.##.',
+        '.#####.',
+        '.#####.',
+        '...#...',
+        '...#...',
+        '...#...',
+        '..###..',
+        '.#####.',
+        '#######',
+      ],
+      // 5×8 extended — cleft top, mitre body, 1-px-wide neck, base.
       extended: [
         '.#.#.',
         '..#..',
@@ -142,10 +169,6 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
-      // Compact:
-      //    ▀▄▀
-      //     █
-      //   ▄███▄
       compact: [
         '.#.#.',
         '..#..',
@@ -154,27 +177,35 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
-      // Small — uniform thin column, only piece with no shoulder.
-      //    █
-      //   ▄█▄
+      // 5×4 small — cleft at top, base.
       small: [
-        '.#.',
-        '.#.',
-        '.#.',
-        '###',
+        '.#.#.',
+        '..#..',
+        '.###.',
+        '#####',
       ],
       mini: '♝',
     ),
 
-    // Rook — straight castellated 3-turret battlement, dead-straight
-    // column body, flat-flat base. NO curves anywhere. Counterpoint to
-    // the queen's wavy silhouette.
-    // Renders as:
-    //   █▄█▄█
-    //    ███
-    //    ███
-    //   █████
+    // ROOK — multi-turret battlement, dead-straight column body, flat
+    // wide base. Only piece with truly straight sides through entire
+    // body (no curves anywhere).
     Role.rook: PieceSprite(
+      // 7×12 xlarge — 4 tall turrets, battlement, tower column, base.
+      xlarge: [
+        '#.#.#.#',
+        '#######',
+        '#######',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '#######',
+        '#######',
+        '#######',
+      ],
       extended: [
         '#.#.#',
         '#####',
@@ -185,10 +216,6 @@ class PieceSprite {
         '#####',
         '#####',
       ],
-      // Compact:
-      //   █▄█▄█
-      //    ███
-      //   █████
       compact: [
         '#.#.#',
         '#####',
@@ -197,28 +224,35 @@ class PieceSprite {
         '#####',
         '#####',
       ],
-      // Small — 2 turrets, thin column, flat base.
-      //   █▄█
-      //   ▄█▄
+      // 5×4 small — turret tops + battlement, flared base.
       small: [
-        '#.#',
-        '###',
-        '.#.',
-        '###',
+        '#.#.#',
+        '#####',
+        '.###.',
+        '#####',
       ],
       mini: '♜',
     ),
 
-    // Queen — multi-spike crown (4 spikes + center peak) + curving
-    // shoulders that flare wider at top of each row pair. The wavy
-    // `▀███▀` pattern is unique to queen — counterpoint to rook's
-    // straight column.
-    // Renders as:
-    //   ▀▄█▄▀
-    //   ▀███▀
-    //   ▀███▀
-    //   ▄███▄
+    // QUEEN — multi-spike crown + curving shoulders that flare wider
+    // at the top of every row pair. Only piece whose body silhouette
+    // CURVES (▀███▀ vs rook's ` ███ ` straight).
     Role.queen: PieceSprite(
+      // 7×12 xlarge — 4-spike crown, curving body, base.
+      xlarge: [
+        '.......',
+        '#.#.#.#',
+        '.#.#.#.',
+        '#######',
+        '.#####.',
+        '#######',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '#######',
+        '#######',
+      ],
       extended: [
         '#.#.#',
         '.###.',
@@ -229,39 +263,44 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
-      // Compact — 5-spike crown (different from rook's 3 in same width).
-      //   ▄█▄█▄
-      //   ▄███▄
-      //   ▄███▄
       compact: [
-        '.#.#.',
-        '#####',
+        '#.#.#',
         '.###.',
         '#####',
         '.###.',
+        '#####',
         '#####',
       ],
-      // Small — only piece that's a SOLID FULL BLOCK at this size.
-      //   ███
-      //   ███
+      // 5×4 small — 3-spike crown + solid wide base (distinct from
+      // rook's flared 5-spike).
       small: [
-        '###',
-        '###',
-        '###',
-        '###',
+        '#.#.#',
+        '.###.',
+        '#####',
+        '#####',
       ],
       mini: '♛',
     ),
 
-    // King — wide horizontal cross-bar that's LITERALLY wider than the
-    // body below it (▄▄█▄▄ spans 5 cols with center peak). Only piece
-    // whose top is wider than its body. The cross is unmistakable.
-    // Renders as:
-    //   ▄▄█▄▄
-    //    ▄█▄
-    //    ███
-    //   ▄███▄
+    // KING — wide horizontal cross-bar wider than the body below it.
+    // The crossbar (`▄▄█▄▄` family) is the ONLY top pattern with a
+    // wide horizontal stripe.
     Role.king: PieceSprite(
+      // 7×12 xlarge — cross tip, wide crossbar, crown, base.
+      xlarge: [
+        '.......',
+        '...#...',
+        '#######',
+        '...#...',
+        '...#...',
+        '#######',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '.#####.',
+        '#######',
+        '#######',
+      ],
       extended: [
         '..#..',
         '#####',
@@ -272,10 +311,6 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
-      // Compact:
-      //   ▄▄█▄▄
-      //    ▄█▄
-      //   ▄███▄
       compact: [
         '..#..',
         '#####',
@@ -284,14 +319,12 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
-      // Small — small point top + WIDE body (thicker than rook/bishop).
-      //   ▄█▄
-      //   ███
+      // 5×4 small — wide cross top, flared base.
       small: [
-        '.#.',
-        '###',
-        '###',
-        '###',
+        '..#..',
+        '#####',
+        '.###.',
+        '#####',
       ],
       mini: '♚',
     ),
@@ -318,12 +351,22 @@ class PieceSprite {
 
   /// Convert a pixel matrix to a list of half-block char rows.
   /// Input height must be even; output height = input ~/ 2.
+  /// Results are cached by source identity — each board redraw calls
+  /// this 32 times (one per piece), so memoizing the encoded rows
+  /// removes per-cell string allocation from the hot path.
+  static final Map<List<String>, List<String>> _renderCache =
+      <List<String>, List<String>>{};
+
   static List<String> halfBlockRows(List<String> pixels) {
+    final cached = _renderCache[pixels];
+    if (cached != null) return cached;
     assert(pixels.length.isEven, 'sprite must have even row count');
     final rows = <String>[];
     for (var i = 0; i < pixels.length; i += 2) {
       rows.add(pair(pixels[i], pixels[i + 1]));
     }
-    return rows;
+    final immutable = List<String>.unmodifiable(rows);
+    _renderCache[pixels] = immutable;
+    return immutable;
   }
 }

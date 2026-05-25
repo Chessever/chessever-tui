@@ -238,42 +238,30 @@ class _BroadcastRow extends StatelessComponent {
   Component build(BuildContext context) {
     final bg = active ? ChesseverColors.black3 : null;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 1),
       decoration: bg == null ? null : BoxDecoration(color: bg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Text(
-                active ? '┃ ' : '  ',
-                style: TextStyle(color: ChesseverColors.primary),
-              ),
-              _CategoryBadge(category: card.category),
-              const SizedBox(width: 1),
-              Expanded(
-                child: Text(
-                  card.title,
-                  style: TextStyle(
-                    color: ChesseverColors.white,
-                    fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          Text(
+            active ? '┃ ' : '  ',
+            style: TextStyle(color: ChesseverColors.primary),
           ),
-          Container(
-            padding: const EdgeInsets.only(left: 4),
-            child: Row(
-              children: [
-                Text(
-                  _metaLine(card),
-                  style: TextStyle(color: ChesseverColors.secondaryText),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+          _CategoryBadge(category: card.category),
+          const SizedBox(width: 1),
+          Expanded(
+            child: Text(
+              card.title,
+              style: TextStyle(
+                color: ChesseverColors.white,
+                fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
+          ),
+          const SizedBox(width: 1),
+          Text(
+            _metaLine(card),
+            style: TextStyle(color: ChesseverColors.secondaryText),
           ),
         ],
       ),
@@ -282,23 +270,30 @@ class _BroadcastRow extends StatelessComponent {
 
   static String _metaLine(BroadcastCard c) {
     final parts = <String>[];
-    if (c.maxAvgElo != null) parts.add('≤${c.maxAvgElo} elo');
-    if (c.timeControl != null) parts.add(c.timeControl!);
-    final dates = _dateRange(c.start, c.end);
+    if (c.maxAvgElo != null) parts.add('${c.maxAvgElo}');
+    if (c.timeControl != null) parts.add(_tcShort(c.timeControl!));
+    final dates = _dateShort(c.start, c.end);
     if (dates.isNotEmpty) parts.add(dates);
-    return parts.join('   ');
+    return parts.join(' · ');
   }
 
-  static String _dateRange(DateTime? s, DateTime? e) {
-    if (s == null && e == null) return '';
-    if (s != null && e != null) return '${_d(s)} → ${_d(e)}';
-    return _d(s ?? e!);
+  static String _tcShort(String tc) => switch (tc.toLowerCase()) {
+        'standard' => 'std',
+        'rapid' => 'rpd',
+        'blitz' => 'blz',
+        'bullet' => 'blt',
+        _ => tc,
+      };
+
+  static String _dateShort(DateTime? s, DateTime? e) {
+    final pick = s ?? e;
+    if (pick == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[pick.month - 1]} ${pick.day}';
   }
-
-  static String _d(DateTime t) =>
-      '${t.year}-${_pad(t.month)}-${_pad(t.day)}';
-
-  static String _pad(int n) => n < 10 ? '0$n' : '$n';
 }
 
 class _CategoryBadge extends StatelessComponent {
@@ -310,19 +305,16 @@ class _CategoryBadge extends StatelessComponent {
   Component build(BuildContext context) {
     final (label, color) = switch (category) {
       TourEventCategory.live => (' LIVE ', ChesseverColors.red),
-      TourEventCategory.ongoing => ('  ●   ', ChesseverColors.green),
-      TourEventCategory.upcoming => ('  ◌   ', ChesseverColors.lightYellow),
-      TourEventCategory.completed =>
-        ('  ✓   ', ChesseverColors.secondaryText),
+      TourEventCategory.ongoing => (' NOW  ', ChesseverColors.green),
+      TourEventCategory.upcoming => (' SOON ', ChesseverColors.lightYellow),
+      TourEventCategory.completed => (' DONE ', ChesseverColors.secondaryText),
     };
-    return Container(
-      child: Text(
-        label,
-        style: TextStyle(
-          color: ChesseverColors.black,
-          backgroundColor: color,
-          fontWeight: FontWeight.bold,
-        ),
+    return Text(
+      label,
+      style: TextStyle(
+        color: ChesseverColors.black,
+        backgroundColor: color,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
