@@ -7,6 +7,7 @@ import 'package:chessever_tui/settings/settings_pane.dart';
 import 'package:chessever_tui/shell/sidebar.dart';
 import 'package:chessever_tui/theme/colors.dart';
 import 'package:chessever_tui/update/update_pane.dart';
+import 'package:chessever_tui/watch/watch_pane.dart';
 import 'package:nocterm/nocterm.dart';
 
 class ChesseverShell extends StatefulComponent {
@@ -33,6 +34,10 @@ class _ChesseverShellState extends State<ChesseverShell> {
         }
         if (ch == 'p' || ch == 'P') {
           setState(() => _route = SidebarRoute.play);
+          return true;
+        }
+        if (ch == 'w' || ch == 'W') {
+          setState(() => _route = SidebarRoute.watch);
           return true;
         }
         if (ch == 's' || ch == 'S') {
@@ -83,6 +88,8 @@ class _ChesseverShellState extends State<ChesseverShell> {
           initialConfig: component.initialConfig ?? PlayConfig.defaultGame,
           settings: _settings,
         );
+      case SidebarRoute.watch:
+        return const WatchPane();
       case SidebarRoute.settings:
         return SettingsPane(
           settings: _settings,

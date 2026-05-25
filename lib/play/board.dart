@@ -230,13 +230,14 @@ class BoardView extends StatelessComponent {
     final spriteRows = _pieceRows(piece);
 
     final rows = List<String>.from(spriteRows);
+    final rowFgs = List<Color>.filled(_cellHeight, baseFg);
     if (isLegalTarget && piece == null) {
       final markerRow = _cellHeight ~/ 2;
       if (markerRow < rows.length) {
         rows[markerRow] =
             _stamp(' ' * _spriteWidth, _spriteWidth ~/ 2, '•');
+        rowFgs[markerRow] = ChesseverColors.legalDot;
       }
-      baseFg = ChesseverColors.legalDot;
     }
 
     final lines = <Component>[];
@@ -244,7 +245,7 @@ class BoardView extends StatelessComponent {
       final line = density == BoardDensity.mini ? rows[i] : ' ${rows[i]} ';
       lines.add(Text(
         line,
-        style: TextStyle(color: baseFg, backgroundColor: bg),
+        style: TextStyle(color: rowFgs[i], backgroundColor: bg),
       ));
     }
 
@@ -268,11 +269,11 @@ class BoardView extends StatelessComponent {
     final sprite = PieceSprite.forRole(piece.role);
     switch (density) {
       case BoardDensity.full:
-        return sprite.extended;
+        return PieceSprite.halfBlockRows(sprite.extended);
       case BoardDensity.compact:
-        return sprite.compact;
+        return PieceSprite.halfBlockRows(sprite.compact);
       case BoardDensity.small:
-        return sprite.small;
+        return PieceSprite.halfBlockRows(sprite.small);
       case BoardDensity.mini:
         return [sprite.mini];
     }

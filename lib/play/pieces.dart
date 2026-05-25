@@ -1,16 +1,20 @@
 import 'package:dartchess/dartchess.dart';
 
-/// Block-art piece sprites adapted from the chess-tui (Rust, MIT) preset.
-/// https://github.com/thomas-mauran/chess-tui — src/pieces/*.rs
+/// Pixel-art chess pieces rendered via half-block characters (▀ ▄ █).
 ///
-/// Same silhouettes for white and black — color (foreground) carries the
-/// side distinction. Four density tiers so the board still reads on
-/// anything from a maximized terminal down to a tmux split:
+/// Each sprite is a binary pixel matrix: `'#'` = inked (piece color),
+/// `'.'` = transparent (shows square background). Two pixel rows pack
+/// into one terminal row via [pair]; the resulting char carries one
+/// foreground (piece color) and one background (square color) per cell.
 ///
-///   full    = 5×4 (chess-tui Extended), inside a 7×4 cell
-///   compact = 5×3 (chess-tui Compact),  inside a 7×3 cell
-///   small   = 3×2 tight variant,        inside a 5×2 cell
-///   mini    = 1×1 Unicode glyph,        inside a 3×1 cell
+/// Sizes:
+///   extended : 5 cols × 8 px (renders 5×4 chars) — full density
+///   compact  : 5 cols × 6 px (renders 5×3 chars) — compact density
+///   small    : 3 cols × 4 px (renders 3×2 chars) — small density
+///   mini     : 1 unicode glyph                    — mini density
+///
+/// Same silhouette for both sides; side distinction comes from the
+/// foreground color the caller passes to the renderer.
 class PieceSprite {
   const PieceSprite({
     required this.extended,
@@ -18,121 +22,205 @@ class PieceSprite {
     required this.small,
     required this.mini,
   });
-  final List<String> extended; // 4 rows × 5 cols
-  final List<String> compact; // 3 rows × 5 cols
-  final List<String> small; // 2 rows × 3 cols
+
+  /// Pixel rows. Even count required (paired top/bottom for half-block).
+  final List<String> extended;
+  final List<String> compact;
+  final List<String> small;
   final String mini;
 
   static const Map<Role, PieceSprite> _glyphs = {
     Role.pawn: PieceSprite(
       extended: [
-        '     ',
-        ' ▝█▘ ',
-        ' ▟█▙ ',
-        ' ▔▔▔ ',
+        '.....',
+        '..#..',
+        '.###.',
+        '.###.',
+        '..#..',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       compact: [
-        '  ▂  ',
-        ' ▆█▆ ',
-        ' ▔▔▔ ',
+        '..#..',
+        '.###.',
+        '..#..',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       small: [
-        '▆█▆',
-        '▔▔▔',
+        '.#.',
+        '###',
+        '.#.',
+        '###',
       ],
       mini: '♟',
     ),
     Role.knight: PieceSprite(
       extended: [
-        '  ▖▗ ',
-        '▗▇▟█▌',
-        ' ▟█▛ ',
-        '▝▀▀▀▘',
+        '..##.',
+        '.####',
+        '##.##',
+        '#####',
+        '.####',
+        '..###',
+        '.####',
+        '#####',
       ],
       compact: [
-        ' ▄▟▟▖',
-        ' ▂█▛▘',
-        '▝▀▀▀▘',
+        '.##..',
+        '####.',
+        '##.##',
+        '.####',
+        '.####',
+        '#####',
       ],
       small: [
-        '▟█▛',
-        '▔▔▔',
+        '##.',
+        '###',
+        '.##',
+        '###',
       ],
       mini: '♞',
     ),
     Role.bishop: PieceSprite(
       extended: [
-        ' ▄▁▗ ',
-        ' ██▟ ',
-        ' ▟█▙ ',
-        '▝▀▀▀▘',
+        '..#..',
+        '.#.#.',
+        '.###.',
+        '..#..',
+        '.###.',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       compact: [
-        ' ▆▖▆ ',
-        ' ▐▙▌ ',
-        ' ▀▀▀ ',
+        '..#..',
+        '.###.',
+        '..#..',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       small: [
-        '▐▙▌',
-        '▔▔▔',
+        '.#.',
+        '###',
+        '.#.',
+        '###',
       ],
       mini: '♝',
     ),
     Role.rook: PieceSprite(
       extended: [
-        '▄ ▄ ▄',
-        '█████',
-        ' ███ ',
-        '▀▀▀▀▀',
+        '#.#.#',
+        '#####',
+        '.###.',
+        '.###.',
+        '.###.',
+        '.###.',
+        '#####',
+        '#####',
       ],
       compact: [
-        ' ▅ ▅ ',
-        ' ███ ',
-        '▝▀▀▀▘',
+        '#.#.#',
+        '#####',
+        '.###.',
+        '.###.',
+        '#####',
+        '#####',
       ],
       small: [
-        '▅▅▅',
-        '███',
+        '#.#',
+        '###',
+        '.#.',
+        '###',
       ],
       mini: '♜',
     ),
     Role.queen: PieceSprite(
       extended: [
-        '▂ ▄ ▂',
-        '▜▙█▟▛',
-        ' ▜█▛ ',
-        '▝▀▀▀▘',
+        '#.#.#',
+        '.###.',
+        '#####',
+        '.###.',
+        '#####',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       compact: [
-        ' ▆▄▆ ',
-        ' ▗█▖ ',
-        ' ▀▀▀ ',
+        '#.#.#',
+        '#####',
+        '.###.',
+        '#####',
+        '.###.',
+        '#####',
       ],
       small: [
-        '▆▄▆',
-        '▗█▖',
+        '#.#',
+        '###',
+        '###',
+        '###',
       ],
       mini: '♛',
     ),
     Role.king: PieceSprite(
       extended: [
-        ' ▂╋▂ ',
-        '▜███▛',
-        ' ▜█▛ ',
-        '▝▀▀▀▘',
+        '..#..',
+        '.###.',
+        '..#..',
+        '#####',
+        '.###.',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       compact: [
-        '▗▂╋▂▖',
-        ' ▀█▀ ',
-        ' ▀▀▀ ',
+        '..#..',
+        '.###.',
+        '#####',
+        '.###.',
+        '.###.',
+        '#####',
       ],
       small: [
-        '╋█╋',
-        '▀█▀',
+        '.#.',
+        '###',
+        '###',
+        '###',
       ],
       mini: '♚',
     ),
   };
 
   static PieceSprite forRole(Role role) => _glyphs[role]!;
+
+  /// Pack two pixel rows into one terminal row using half-blocks.
+  /// `top` and `bottom` must be equal-length strings of `'#'` (ink) and
+  /// `'.'` (transparent). Output uses `' '` for empty, `'▀'` for top-only,
+  /// `'▄'` for bottom-only, `'█'` for both.
+  static String pair(String top, String bottom) {
+    assert(top.length == bottom.length);
+    final out = StringBuffer();
+    for (var i = 0; i < top.length; i++) {
+      final t = top.codeUnitAt(i) == 0x23; // '#'
+      final b = bottom.codeUnitAt(i) == 0x23;
+      out.writeCharCode(
+        t && b ? 0x2588 : t ? 0x2580 : b ? 0x2584 : 0x20,
+      );
+    }
+    return out.toString();
+  }
+
+  /// Convert a pixel matrix to a list of half-block char rows.
+  /// Input height must be even; output height = input ~/ 2.
+  static List<String> halfBlockRows(List<String> pixels) {
+    assert(pixels.length.isEven, 'sprite must have even row count');
+    final rows = <String>[];
+    for (var i = 0; i < pixels.length; i += 2) {
+      rows.add(pair(pixels[i], pixels[i + 1]));
+    }
+    return rows;
+  }
 }

@@ -3,6 +3,7 @@ import 'package:nocterm/nocterm.dart';
 
 enum SidebarRoute {
   play('Play', '♞'),
+  watch('Watch', '◉'),
   settings('Settings', '⚙'),
   update('Update', '⇧');
 
@@ -155,6 +156,10 @@ class _FooterHint extends StatelessComponent {
         children: [
           Text(
             'p play',
+            style: TextStyle(color: ChesseverColors.tertiaryText),
+          ),
+          Text(
+            'w watch',
             style: TextStyle(color: ChesseverColors.tertiaryText),
           ),
           Text(
