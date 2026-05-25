@@ -7,14 +7,22 @@ import 'package:dartchess/dartchess.dart';
 /// into one terminal row via [pair]; the resulting char carries one
 /// foreground (piece color) and one background (square color) per cell.
 ///
+/// Identity is locked by silhouette, not detail. Each role has a
+/// unique top-row pattern AND a unique body shape so the eye separates
+/// pieces at a glance:
+///
+///   pawn   — single-pixel head, no neighbors, smallest
+///   knight — asymmetric, eye-notch in face, only non-symmetric piece
+///   bishop — cleft mitre + 1-px-wide neck (no other piece has thin neck)
+///   rook   — straight castellated 3-turret + dead-straight columns
+///   queen  — multi-spike crown + curving shoulders (▀███▀)
+///   king   — wide horizontal cross-bar (▄▄█▄▄), wider than body
+///
 /// Sizes:
 ///   extended : 5 cols × 8 px (renders 5×4 chars) — full density
 ///   compact  : 5 cols × 6 px (renders 5×3 chars) — compact density
 ///   small    : 3 cols × 4 px (renders 3×2 chars) — small density
 ///   mini     : 1 unicode glyph                    — mini density
-///
-/// Same silhouette for both sides; side distinction comes from the
-/// foreground color the caller passes to the renderer.
 class PieceSprite {
   const PieceSprite({
     required this.extended,
@@ -30,52 +38,81 @@ class PieceSprite {
   final String mini;
 
   static const Map<Role, PieceSprite> _glyphs = {
+    // Pawn — tiny isolated head, narrow stem, wide flat base.
+    // Renders as:
+    //     ▄
+    //    ▀█▀
+    //    ▄█▄
+    //   █████
     Role.pawn: PieceSprite(
       extended: [
         '.....',
         '..#..',
         '.###.',
-        '.###.',
+        '..#..',
         '..#..',
         '.###.',
-        '.###.',
+        '#####',
         '#####',
       ],
+      // Compact:
+      //    ▄
+      //   ▀█▀
+      //   ▄███▄
       compact: [
+        '.....',
         '..#..',
         '.###.',
         '..#..',
-        '.###.',
         '.###.',
         '#####',
       ],
+      // Small:
+      //   ▄
+      //  ███
       small: [
+        '...',
         '.#.',
         '###',
-        '.#.',
         '###',
       ],
       mini: '♟',
     ),
+
+    // Knight — asymmetric horse profile facing left. Ear top-left, mass
+    // sloping bottom-right, eye-notch in face row. Only piece with no
+    // bilateral symmetry — instantly readable.
+    // Renders as:
+    //   ▄██▄
+    //   ██▀██
+    //    ▀███
+    //   ▄████
     Role.knight: PieceSprite(
       extended: [
-        '..##.',
-        '.####',
-        '##.##',
+        '.##..',
+        '####.',
         '#####',
+        '##.##',
         '.####',
         '..###',
         '.####',
         '#####',
       ],
+      // Compact:
+      //   ▄██▄
+      //   ▀█▄██
+      //   ▄▄███
       compact: [
         '.##..',
         '####.',
         '##.##',
         '.####',
-        '.####',
+        '..###',
         '#####',
       ],
+      // Small:
+      //   ██▄
+      //   ▄██
       small: [
         '##.',
         '###',
@@ -84,33 +121,59 @@ class PieceSprite {
       ],
       mini: '♞',
     ),
+
+    // Bishop — cleft mitre on top + uniquely thin 1-pixel neck. The
+    // cleft (split point) makes top read as TWO ears with a valley
+    // between. The hair-thin neck `  █  ` is the bishop's body
+    // signature — no other piece narrows that far.
+    // Renders as:
+    //    ▀▄▀
+    //    ███
+    //     █
+    //   ▄███▄
     Role.bishop: PieceSprite(
       extended: [
-        '..#..',
         '.#.#.',
-        '.###.',
         '..#..',
         '.###.',
         '.###.',
+        '..#..',
+        '..#..',
         '.###.',
         '#####',
       ],
+      // Compact:
+      //    ▀▄▀
+      //     █
+      //   ▄███▄
       compact: [
+        '.#.#.',
         '..#..',
-        '.###.',
         '..#..',
-        '.###.',
+        '..#..',
         '.###.',
         '#####',
       ],
+      // Small — uniform thin column, only piece with no shoulder.
+      //    █
+      //   ▄█▄
       small: [
         '.#.',
-        '###',
+        '.#.',
         '.#.',
         '###',
       ],
       mini: '♝',
     ),
+
+    // Rook — straight castellated 3-turret battlement, dead-straight
+    // column body, flat-flat base. NO curves anywhere. Counterpoint to
+    // the queen's wavy silhouette.
+    // Renders as:
+    //   █▄█▄█
+    //    ███
+    //    ███
+    //   █████
     Role.rook: PieceSprite(
       extended: [
         '#.#.#',
@@ -122,6 +185,10 @@ class PieceSprite {
         '#####',
         '#####',
       ],
+      // Compact:
+      //   █▄█▄█
+      //    ███
+      //   █████
       compact: [
         '#.#.#',
         '#####',
@@ -130,6 +197,9 @@ class PieceSprite {
         '#####',
         '#####',
       ],
+      // Small — 2 turrets, thin column, flat base.
+      //   █▄█
+      //   ▄█▄
       small: [
         '#.#',
         '###',
@@ -138,6 +208,16 @@ class PieceSprite {
       ],
       mini: '♜',
     ),
+
+    // Queen — multi-spike crown (4 spikes + center peak) + curving
+    // shoulders that flare wider at top of each row pair. The wavy
+    // `▀███▀` pattern is unique to queen — counterpoint to rook's
+    // straight column.
+    // Renders as:
+    //   ▀▄█▄▀
+    //   ▀███▀
+    //   ▀███▀
+    //   ▄███▄
     Role.queen: PieceSprite(
       extended: [
         '#.#.#',
@@ -149,41 +229,64 @@ class PieceSprite {
         '.###.',
         '#####',
       ],
+      // Compact — 5-spike crown (different from rook's 3 in same width).
+      //   ▄█▄█▄
+      //   ▄███▄
+      //   ▄███▄
       compact: [
-        '#.#.#',
+        '.#.#.',
         '#####',
         '.###.',
         '#####',
         '.###.',
         '#####',
       ],
+      // Small — only piece that's a SOLID FULL BLOCK at this size.
+      //   ███
+      //   ███
       small: [
-        '#.#',
+        '###',
         '###',
         '###',
         '###',
       ],
       mini: '♛',
     ),
+
+    // King — wide horizontal cross-bar that's LITERALLY wider than the
+    // body below it (▄▄█▄▄ spans 5 cols with center peak). Only piece
+    // whose top is wider than its body. The cross is unmistakable.
+    // Renders as:
+    //   ▄▄█▄▄
+    //    ▄█▄
+    //    ███
+    //   ▄███▄
     Role.king: PieceSprite(
       extended: [
         '..#..',
-        '.###.',
-        '..#..',
         '#####',
+        '..#..',
+        '.###.',
         '.###.',
         '.###.',
         '.###.',
         '#####',
       ],
+      // Compact:
+      //   ▄▄█▄▄
+      //    ▄█▄
+      //   ▄███▄
       compact: [
         '..#..',
-        '.###.',
         '#####',
+        '..#..',
         '.###.',
         '.###.',
         '#####',
       ],
+      // Small — small point top + WIDE body (thicker than rook/bishop).
+      //   ▄█▄
+      //   ███
       small: [
         '.#.',
         '###',
