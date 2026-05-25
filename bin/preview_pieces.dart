@@ -1,5 +1,5 @@
 // Visual smoke test for pixel piece sprites. Prints the initial position
-// at all four density tiers using raw ANSI 24-bit color escapes — no
+// at all five density tiers using raw ANSI 24-bit color escapes — no
 // nocterm event loop, so output is captured cleanly in a regular shell.
 //
 //   dart run bin/preview_pieces.dart
